@@ -24,6 +24,21 @@ void InitProcKeyOne(void)
 void  ProcKeyDownKey1(void)
 {
   /* 待实现：检查 GetDisplayState() 并相应地分发处理。 */
+  switch (GetDisplayState())
+  {
+  //信号输出页 -> 切换输出启动/停止
+  case DISPLAY_SIGNAL_OUTPUT:
+    OutputChange();
+    break;
+  //设置页 -> 光标移到下一个设置项
+  case DISPLAY_SETTINGS:
+    ParamChange();
+    break;
+  case DISPLAY_SIGNAL_MEASURE:
+    // 信号测量页按下 KEY1 无操作
+  default:
+    break;
+  }
 }
 
 
@@ -43,6 +58,10 @@ void  ProcKeyUpKey1(void)
 void  ProcKeyDownKey2(void)
 {
   /* 待实现：若处于设置页，调用 ValueChange()。 */
+  if (GetDisplayState() == DISPLAY_SETTINGS)
+  {
+    ValueChange();
+  }
 }
 
 
@@ -80,6 +99,19 @@ void  ProcKeyDownKey3(void)
    *   重置 d_cnt=0, longPress=0。
    *   若处于设置页：holding=1（启动长按计时）。
    *   否则：holding=0，调用 DisplayChange()（短按切页）。 */
+  d_cnt = 0;
+  longPress = 0;
+
+  if (GetDisplayState() == DISPLAY_SETTINGS)
+  {
+    holding = 1; // 启动长按计时
+  }
+  else
+  {
+    holding = 0; // 非设置页，短按切页
+    DisplayChange();
+  }
+  
 }
 
 
@@ -105,6 +137,24 @@ void  ProcKeyUpKey3(void)
    *     若处于设置页：调用 SaveSettings()。
    *     否则：调用 DisplayChange()。
    */
+
+  holding = 0; // 停止长按计时
+
+  if (longPress == 1)
+  {
+    longPress = 0;
+    d_cnt = 0;
+
+    if (GetDisplayState() == DISPLAY_SETTINGS)
+    {
+      SaveSettings();
+    }
+    else
+    {
+      DisplayChange();
+    }
+  }
+   
 }
 
 
@@ -124,4 +174,15 @@ void ProcKeyCheckKey3(void)
    *     d_cnt++
    *     若 d_cnt >= 1000：longPress = 1, holding = 0
    */
+
+  if (holding == 1)
+  {
+    d_cnt++;
+    if (d_cnt >= 1000)
+    {
+      longPress = 1;
+      holding = 0; // 停止计时，避免重复触发
+    }
+  }
+
 }
