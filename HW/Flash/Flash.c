@@ -26,6 +26,7 @@ static void WriteWordNoCheck(const u32 startAddr, u32 *pBuf, u16 numToWrite);
 static u32  ReadWord(const u32 addr)
 {
   /* 待实现：return *(vu32*)addr; */
+  return *((volatile u32*)addr);
   return 0;
 }
 
@@ -47,6 +48,11 @@ static void WriteWordNoCheck(const u32 startAddr, u32 *pBuf, u16 numToWrite)
    *   for i = 0 to numToWrite-1:
    *     FLASH_ProgramWord(startAddr + i*4, pBuf[i]);
    */
+  u16 i;
+  for(i = 0; i < numToWrite; i++)
+  {
+    FLASH_ProgramWord(startAddr + (u32)i * 4, pBuf[i]);//写入一个32位字
+  }
 }
 
 
@@ -91,6 +97,69 @@ void  STM32FlashWriteWord(const u32 startAddr, u32* pBuf, u16 numToWrite)
    *       合并数据、写回、处理跨页、锁定。
    *       使用 STM32FlashReadWord 读取页面，FLASH_ErasePage 擦除，
    *       WriteWordNoCheck 写入。 */
+  u32 currAddr;
+  u16 currIndex;
+  u16 pageWords;
+
+  //如果起始地址小于 Flash 基地址，或者缓冲区为空，或者写入数量为0，则返回
+  if(startAddr < STM32_FLASH_BASE || pBuf == NULL || numToWrite == 0)
+  {
+    return; //无效参数
+  }
+
+  pageWords = (u16)(FLASH_PAGE_SIZE / 4); //每页的字数
+  currAddr = startAddr; //当前写入地址
+  currIndex = 0; //当前写入数据的索引
+
+  FLASH_Unlock(); //解锁 Flash
+
+  while(numToWrite > 0)
+  {
+    u32 offAddr;
+    u32 pageBase;
+    u16 pageOff;
+    u16 pageResidue;
+    u16 chunk;
+    u16 i;
+    BOOL needErase = FALSE;
+
+    offAddr = currAddr - STM32_FLASH_BASE; //计算偏移地址
+    pageBase = STM32_FLASH_BASE + (offAddr / FLASH_PAGE_SIZE) * FLASH_PAGE_SIZE; //计算页基地址
+    pageOff = (u16)((offAddr % FLASH_PAGE_SIZE) / 4); //计算页内偏移
+    pageResidue = (u16)(pageWords - pageOff); //计算页内剩余字数
+    chunk = (numToWrite < pageResidue) ? numToWrite : pageResidue; //本次写入的字数
+
+
+    for(i = 0; i < chunk; i++)
+    {
+      if(ReadWord(currAddr + (u32)i * 4) != 0xFFFFFFFFUL)
+      {
+        needErase = TRUE; //如果目标字不是全1，标记需要擦除
+        break;
+      }
+    }
+    if(needErase)
+    {
+      STM32FlashReadWord(pageBase, s_arrFlashBuf, pageWords); //备份整页数据
+      for(i = 0; i < chunk; i++)
+      {
+        s_arrFlashBuf[pageOff + i] = pBuf[currIndex + i]; //合并新数据到备份中
+      }
+
+      FLASH_ErasePage(pageBase); //擦除该页
+      WriteWordNoCheck(pageBase, s_arrFlashBuf, pageWords); //写回整页数据
+    }
+    else
+    {
+      WriteWordNoCheck(currAddr, &pBuf[currIndex], chunk); //直接写入数据
+    }
+
+    currAddr += (u32)chunk * 4; //更新当前地址
+    currIndex += chunk; //更新当前索引
+    numToWrite -= chunk; //更新剩余写入数量
+  }
+
+  FLASH_Lock(); //锁定 Flash
 }
 
 
@@ -108,4 +177,16 @@ void  STM32FlashReadWord(const u32 startAddr, u32* pBuf, u16 numToRead)
 {
   /* 待实现：for i = 0 to numToRead-1:
    *         pBuf[i] = ReadWord(startAddr + i*4); */
+
+  u16 i;
+  //如果起始地址小于 Flash 基地址，或者缓冲区为空，或者读取数量为0，则返回
+  if(pBuf == NULL || numToRead == 0)
+  {
+    return; //无效参数
+  }
+
+  for(i = 0; i < numToRead; i++)
+  {
+    pBuf[i] = ReadWord(startAddr + (u32)i * 4); //读取每个字
+  }
 }
