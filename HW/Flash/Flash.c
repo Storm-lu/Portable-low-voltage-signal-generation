@@ -1,0 +1,111 @@
+#include "Flash.h"
+#include "stm32f10x_conf.h"
+#include "UART1.h"
+
+
+#define FLASH_PAGE_SIZE ((u16)0x0800)
+
+
+static u32 s_arrFlashBuf[FLASH_PAGE_SIZE / 4];
+
+
+static u32  ReadWord(const u32 addr);
+static void WriteWordNoCheck(const u32 startAddr, u32 *pBuf, u16 numToWrite);
+
+
+/*
+ * 底层：从 Flash 地址读取一个32位字。
+ *
+ * 参数：
+ *   addr - Flash 绝对地址（如 0x0803F800）
+ *
+ * 返回值：该地址处的32位数据。
+ *
+ * 实现方式：直接将该地址作为 volatile u32 指针解引用。
+ */
+static u32  ReadWord(const u32 addr)
+{
+  /* 待实现：return *(vu32*)addr; */
+  return 0;
+}
+
+
+/*
+ * 底层：向 Flash 写入数据，不做擦除检查。
+ *
+ * 参数：
+ *   startAddr   - 起始 Flash 地址
+ *   pBuf        - 数据缓冲区指针
+ *   numToWrite  - 要写入的32位字数量
+ *
+ * 使用标准外设库的 FLASH_ProgramWord()。
+ * 不检查目标区域是否已擦除（调用者须确保为 0xFF）。
+ */
+static void WriteWordNoCheck(const u32 startAddr, u32 *pBuf, u16 numToWrite)
+{
+  /* 待实现：
+   *   for i = 0 to numToWrite-1:
+   *     FLASH_ProgramWord(startAddr + i*4, pBuf[i]);
+   */
+}
+
+
+/*
+ * 初始化 Flash（当前为空，保留以备将来使用）。
+ */
+void InitFlash(void)
+{
+  /* 无需初始化。 */
+}
+
+
+/*
+ * 向 Flash 写入数据，自动处理页擦除。
+ *
+ * 这是关键函数。Flash 只能通过擦除（将所有位置1）实现 0->1，
+ * 再编程实现 1->0。不能向未擦除的区域写入数据，否则会损坏数据。
+ *
+ * 算法流程：
+ *   1. 解锁 Flash（FLASH_Unlock）
+ *   2. 计算起始地址所在的页：
+ *        offAddr   = addr - STM32_FLASH_BASE
+ *        pagePos   = offAddr / FLASH_PAGE_SIZE
+ *        pageOff   = (offAddr % FLASH_PAGE_SIZE) / 4   （页内字偏移）
+ *        pageResidue = FLASH_PAGE_SIZE/4 - pageOff     （页内剩余字数）
+ *   3. 将整页数据读入 s_arrFlashBuf（备份）
+ *   4. 检查目标字是否全为 0xFFFFFFFF（已擦除）：
+ *        若是：直接用 WriteWordNoCheck 写入
+ *        若否：擦除该页，将新数据合并到备份中，整页写回
+ *   5. 处理跨页写入（数据跨越页边界的情况）
+ *   6. 锁定 Flash（FLASH_Lock）
+ *
+ * 参数：
+ *   startAddr  - Flash 绝对地址（必须 >= STM32_FLASH_BASE）
+ *   pBuf       - 要写入的数据
+ *   numToWrite - 32位字数量
+ */
+void  STM32FlashWriteWord(const u32 startAddr, u32* pBuf, u16 numToWrite)
+{
+  /* 待实现：按上述说明实现页感知的写入算法。
+   *       关键步骤：解锁、读页、检查是否已擦除、必要时擦除、
+   *       合并数据、写回、处理跨页、锁定。
+   *       使用 STM32FlashReadWord 读取页面，FLASH_ErasePage 擦除，
+   *       WriteWordNoCheck 写入。 */
+}
+
+
+/*
+ * 从 Flash 读取数据。
+ *
+ * 参数：
+ *   startAddr - Flash 绝对地址
+ *   pBuf      - 输出缓冲区
+ *   numToRead - 要读取的32位字数量
+ *
+ * 简单循环：通过 ReadWord() 读取每个字并存入 pBuf。
+ */
+void  STM32FlashReadWord(const u32 startAddr, u32* pBuf, u16 numToRead)
+{
+  /* 待实现：for i = 0 to numToRead-1:
+   *         pBuf[i] = ReadWord(startAddr + i*4); */
+}
