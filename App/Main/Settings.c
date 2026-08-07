@@ -33,6 +33,45 @@ static SettingItem current_setting = SETTING_SIGNAL_OUTPUT;
  */
 void InitSettings(void){
     /* 待实现：从 Flash 读取、校验、加载或使用默认值。 */
+    u32 buf[4];
+
+    STM32FlashReadWord(FLASH_SETTINGS_ADDR, buf, 4);
+
+    if(buf[0] == FLASH_MAGIC_NUMBER)
+    {
+
+        signal_mode = (SignalOutputType)buf[1];
+        pwm_freq = (PWMFreq)buf[2];
+        pwm_duty = (PWMDuty)buf[3];
+
+        //如果 signal_mode 超过最大值，则复位为 DC_1V
+        if(signal_mode > SINE)
+        {
+            signal_mode = DC_1V;
+        }
+
+        //如果 pwm_freq 超过最大值，则复位为 PWM_FREQ_100Hz
+        if(pwm_freq > PWM_FREQ_5KHz)
+        {
+            pwm_freq = PWM_FREQ_100Hz;
+        }
+
+        //如果 pwm_duty 超过最大值，则复位为 PWM_DUTY_25
+        if(pwm_duty > PWM_DUTY_75)
+        {
+            pwm_duty = PWM_DUTY_25;
+        }
+    }
+    //否则使用默认值
+    else
+    {
+        signal_mode = DC_1V;
+        pwm_freq = PWM_FREQ_1KHz;
+        pwm_duty = PWM_DUTY_50;
+    }
+
+    //设置 current_setting 为 SETTING_SIGNAL_OUTPUT
+    current_setting = SETTING_SIGNAL_OUTPUT;
 }
 
 /*
@@ -53,6 +92,109 @@ void InitSettings(void){
  */
 void DisplaySettings(void){
     /* 待实现：按上述说明实现布局。 */
+    OLEDClear();
+
+    //标题
+    OLEDShowString(0,0,(const u8*)"Settings");
+
+    //如果 current_setting == SETTING_SIGNAL_OUTPUT，则显示 ">"，否则显示空格
+    if (current_setting == SETTING_SIGNAL_OUTPUT)
+    {
+        OLEDShowChar(0, 16, '>', 16, 1);
+    }
+    else
+    {
+        OLEDShowChar(0, 16, ' ', 16, 1);
+    }
+
+    //显示 Mode 行
+    OLEDShowString(8, 16, (const u8*)"Mode:");
+    switch (signal_mode)
+    {
+    case DC_1V:
+        OLEDShowString(48,16,(const u8*)"DC 1.0V");
+        break;
+    case DC_2V:
+        OLEDShowString(48,16,(const u8*)"DC 2.0V");
+        break;
+    case TRIANGLE:
+        OLEDShowString(48,16,(const u8*)"TRI 100Hz");
+    case PWM:
+        OLEDShowString(48,16,(const u8*)"PWM");
+        break;
+    case SINE:
+        OLEDShowString(48,16,(const u8*)"SINE 100Hz");
+        break;
+    
+    default:
+        OLEDShowString(48,16,(const u8*)"DC 1.0V");
+        break;
+    }
+    
+    //如果 signal_mode == PWM，则显示 Freq 行
+    if(signal_mode == PWM)
+    {
+        if(current_setting == SETTING_PWM_FREQ)//如果 current_setting == SETTING_PWM_FREQ，则显示 ">"，否则显示空格
+        {
+            OLEDShowChar(0, 32, '>', 16, 1);
+        }
+        else
+        {
+            OLEDShowChar(0, 32, ' ', 16, 1);
+        }
+        OLEDShowString(8, 32, (const u8*)"Freq:");
+        //显示频率值
+        switch (pwm_freq)
+        {
+            case PWM_FREQ_100Hz:
+                OLEDShowString(48,32,(const u8*)"100Hz");
+                break;
+            case PWM_FREQ_1KHz:
+                OLEDShowString(48,32,(const u8*)"1kHz");
+                break;
+            case PWM_FREQ_5KHz:
+                OLEDShowString(48,32,(const u8*)"5kHz");
+                break;
+            default:
+                OLEDShowString(48,32,(const u8*)"1KHz");
+                break;
+
+        }
+
+        if(current_setting == SETTING_PWM_DUTY)
+        {
+            OLEDShowChar(0, 48, '>', 16, 1);
+        }
+        else
+        {
+            OLEDShowChar(0, 48, ' ', 16, 1);
+        }
+
+        OLEDShowString(8, 48, (const u8*)"Duty:");
+        //显示占空比值
+        switch (pwm_duty)
+        {
+            case PWM_DUTY_25:
+                OLEDShowString(48,48,(const u8*)"25%");
+                break;
+            case PWM_DUTY_50:
+                OLEDShowString(48,48,(const u8*)"50%");
+                break;
+            case PWM_DUTY_75:
+                OLEDShowString(48,48,(const u8*)"75%");
+                break;
+            default:
+                OLEDShowString(48,48,(const u8*)"50%");
+                break;
+
+        }
+    }
+    else
+    {
+        current_setting = SETTING_SIGNAL_OUTPUT; //非 PWM 模式下，current_setting 锁定在 Mode
+    }
+
+    OLEDRefreshGRAM();
 }
 
 /*
@@ -65,6 +207,27 @@ void DisplaySettings(void){
  */
 void ParamChange(void){
     /* 待实现：实现光标循环，受 PWM 模式限制。 */
+    if(signal_mode == PWM)//如果当前模式为 PWM，则循环切换光标
+    {
+        if (current_setting == SETTING_SIGNAL_OUTPUT)
+        {
+            current_setting = SETTING_PWM_FREQ;
+        }
+        else if(current_setting == SETTING_PWM_FREQ)
+        {
+            current_setting = SETTING_PWM_DUTY;
+        }
+        else
+        {
+            current_setting = SETTING_SIGNAL_OUTPUT;
+        }
+        
+    }
+    else//否则光标锁定在 SETTING_SIGNAL_OUTPUT
+    {
+        current_setting = SETTING_SIGNAL_OUTPUT;
+    }
+
 }
 
 /*
@@ -78,6 +241,48 @@ void ParamChange(void){
  */
 void ValueChange(void){
     /* 待实现：为每个设置项实现值循环。 */
+    //进入循环
+    if (current_setting == SETTING_SIGNAL_OUTPUT)
+    {
+        if(signal_mode == SINE)
+        {
+            signal_mode = DC_1V;
+        }
+        else
+        {
+            signal_mode = (SignalOutputType)(signal_mode + 1);//循环切换信号输出模式
+        }
+
+        if(signal_mode != PWM)
+        {
+            current_setting = SETTING_SIGNAL_OUTPUT; //非 PWM 模式下，current_setting 锁定在 Mode
+        }
+    }
+    
+    //循环 PWM 频率
+    else if(current_setting == SETTING_PWM_FREQ)
+    {
+        if(pwm_freq == PWM_FREQ_5KHz)
+        {
+            pwm_freq = PWM_FREQ_100Hz;
+        }
+        else
+        {
+            pwm_freq = (PWMFreq)(pwm_freq + 1);//循环切换 PWM 频率
+        }
+    }
+    //循环 PWM 占空比
+    else if(current_setting == SETTING_PWM_DUTY)
+    {
+        if(pwm_duty == PWM_DUTY_75)
+        {
+            pwm_duty = PWM_DUTY_25;
+        }
+        else
+        {
+            pwm_duty = (PWMDuty)(pwm_duty + 1);//循环切换 PWM 占空比
+        }
+    }
 }
 
 /*
@@ -96,6 +301,28 @@ void ValueChange(void){
  */
 void SaveSettings(void){
     /* 待实现：应用设置、写 Flash、切换页面。 */
+
+    u32 buf[4];
+
+    SetSignalOutputType(signal_mode);//应用信号输出模式
+
+    if(signal_mode == PWM)
+    {
+        SetPWMFreq(pwm_freq);//应用 PWM 频率
+        SetPWMDuty(pwm_duty);//应用 PWM 占空比
+    }
+
+    //暂存buf数组，准备写入 Flash
+    buf[0] = FLASH_MAGIC_NUMBER;
+    buf[1] = (u32)signal_mode;
+    buf[2] = (u32)pwm_freq;
+    buf[3] = (u32)pwm_duty;
+
+    STM32FlashWriteWord(FLASH_SETTINGS_ADDR, buf, 4);//写入 Flash
+
+    current_setting = SETTING_SIGNAL_OUTPUT; //保存设置后，current_setting 复位为 SETTING_SIGNAL_OUTPUT
+
+    DisplayChange(); //返回上一页面
 }
 
 /* ============================================================
