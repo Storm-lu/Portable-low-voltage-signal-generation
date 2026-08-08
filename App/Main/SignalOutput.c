@@ -18,7 +18,7 @@ static u8 signal_state = 0;
  */
 void InitSignalOutput(void){
     /* 待实现：从 Settings 读取模式，状态设为停止。 */
-    signal_mode = GetSignalOutputType();
+    signal_mode = GetSettingsSignalMode();
     signal_state = 0;
 }
 

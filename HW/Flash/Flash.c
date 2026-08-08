@@ -27,7 +27,7 @@ static u32  ReadWord(const u32 addr)
 {
   /* 待实现：return *(vu32*)addr; */
   return *((volatile u32*)addr);
-  return 0;
+  
 }
 
 

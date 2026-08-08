@@ -1,6 +1,7 @@
 #ifndef __SIGNALMEASURE__H
 #define __SIGNALMEASURE__H
 
+#include "DataType.h"
 /*
  * 初始化信号测量模块（目前为空）。
  */
@@ -16,6 +17,7 @@ void InitSignalMeasure(void);
  * 调用 A组的 GetADCBuf/GetADCStats 和 B组的 GetCaptureFreq/GetCaptureDuty。
  * 由 DisplayProcess() 以 10Hz 频率调用。
  */
+
 void DisplaySignalMeasure(void);
 
 #endif

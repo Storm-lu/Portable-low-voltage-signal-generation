@@ -119,6 +119,7 @@ void DisplaySettings(void){
         break;
     case TRIANGLE:
         OLEDShowString(48,16,(const u8*)"TRI 100Hz");
+        break;
     case PWM:
         OLEDShowString(48,16,(const u8*)"PWM");
         break;

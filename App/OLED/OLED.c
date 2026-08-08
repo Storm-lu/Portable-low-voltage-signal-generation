@@ -355,7 +355,7 @@ void  OLEDShowChar(u8 x, u8 y, u8 chr, u8 size, u8 mode)
     chr = ' ';  //显示空格
   }
 
-  if (size == 15)
+  if (size == 12)
   {
     pFont = g_iASCII1206[chr - ' '];  //指向12x6字模数据
   }
