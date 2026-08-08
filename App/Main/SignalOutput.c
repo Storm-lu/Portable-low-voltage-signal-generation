@@ -18,6 +18,8 @@ static u8 signal_state = 0;
  */
 void InitSignalOutput(void){
     /* 待实现：从 Settings 读取模式，状态设为停止。 */
+    signal_mode = GetSignalOutputType();
+    signal_state = 0;
 }
 
 /*
@@ -36,6 +38,47 @@ void InitSignalOutput(void){
  */
 void DisplaySignalOutput(void){
     /* 待实现：按上述说明实现显示布局。 */
+    OLEDClear();
+
+    //标题
+    OLEDShowString(0, 0, (const u8*)"Signal Output:");
+    OLEDShowString(0, 16, (const u8*)"M:");
+    //显示模式名称
+    switch (signal_mode)
+    {
+    case DC_1V:
+        OLEDShowString(16, 16, (const u8*)"DC 1.0V");
+        break;
+    case DC_2V:
+        OLEDShowString(16, 16, (const u8*)"DC 2.0V");
+        break;
+    case TRIANGLE:
+        OLEDShowString(16, 16, (const u8*)"TRI 100Hz");
+        break;
+    case SINE:
+        OLEDShowString(16, 16, (const u8*)"SINE 100Hz");
+        break;
+    case PWM:
+        OLEDShowString(16, 16, (const u8*)"PWM");
+        break;
+    default:
+        OLEDShowString(16, 16, (const u8*)"DC 1.0V");
+        break;
+    }
+    //显示状态
+    OLEDShowString(0, 32, (const u8*)"S:");
+    if(signal_state)
+    {
+        OLEDShowString(16, 32, (const u8*)"RUNNING");
+    }
+    else
+    {
+        OLEDShowString(16, 32, (const u8*)"STOPPED");
+    }
+
+    //显示提示
+    OLEDShowString(0, 48, (const u8*)"KEY1: Start/Stop");
+    OLEDRefreshGRAM();//刷新显示
 }
 
 /*
@@ -54,6 +97,40 @@ void DisplaySignalOutput(void){
  */
 void OutputChange(void){
     /* 待实现：按上述说明实现启动/停止切换。 */
+    if (signal_state)
+    {
+        StopDAC();
+        StopPWM();
+        signal_state = 0;
+    }
+    else
+    {
+        switch (signal_mode)
+        {
+        case TRIANGLE:
+            SetDACWaveTri();
+            StartDACWave();
+            break;
+        case SINE:
+            SetDACWaveSine();
+            StartDACWave();
+            break;
+        case PWM:
+            StartPWM(GetSettingsPWMFreq(), GetSettingsPWMDuty());
+            break;
+        case DC_1V:
+            StartDAC(1241);
+            break;
+        case DC_2V:
+            StartDAC(2482);
+            break;
+        default:
+            StartDAC(1241);
+            break;
+        }
+        signal_state = 1;
+    }
+    
 }
 
 /*
@@ -75,6 +152,41 @@ void OutputChange(void){
  */
 void SetSignalOutputType(SignalOutputType type){
     /* 待实现：按上述说明实现模式切换 + 重启。 */
+    if (signal_state)
+    {
+        StopDAC();
+        StopPWM();
+        signal_state = 0;
+    }
+    signal_mode = type;//设置新的信号输出类型
+    //根据新的信号输出类型启动相应的输出
+    switch (signal_mode)
+    {
+    case TRIANGLE:
+        SetDACWaveTri();
+        StartDACWave();
+        break;
+    case SINE:
+        SetDACWaveSine();
+        StartDACWave();
+        break;
+    case PWM:
+        StartPWM(GetSettingsPWMFreq(), GetSettingsPWMDuty());
+        break;
+    case DC_1V:
+        StartDAC(1241);
+        break;
+    case DC_2V:
+        StartDAC(2482);
+        break;
+    default:
+        StartDAC(1241);
+        break;
+    }
+
+    //设置 signal_state 为 1，表示输出已启动
+    signal_state = 1;
+
 }
 
 /*
