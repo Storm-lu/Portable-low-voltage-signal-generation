@@ -22,6 +22,12 @@ static u8 s_displayCnt = 0;
 void InitDisplay(void)
 {
     /* 待实现：按上述说明实现。 */
+    displayState = DISPLAY_SIGNAL_MEASURE; //初始页面为信号测量
+    s_displayCnt = 0; //复位帧计数器清零
+
+    InitSignalMeasure(); //初始化信号测量模块
+    InitSettings(); //初始化设置模块，从 Flash 加载参数
+    InitSignalOutput(); //初始化信号输出模块，通过 GetSettingsSignalMode() 读取模式
 }
 
 /*
@@ -42,6 +48,25 @@ void DisplayProcess(void){
      *   if(s_displayCnt < 50) return;
      *   s_displayCnt = 0;
      *   switch(displayState) { ... 调用对应的显示函数 ... } */
+
+    s_displayCnt++;//计数器加1
+    if(s_displayCnt < 50) return; //如果计数器小于50，则返回
+    s_displayCnt = 0; //计数器复位为0
+
+    switch(displayState) //根据当前 displayState 调用对应的显示函数
+    {
+        case DISPLAY_SIGNAL_MEASURE:
+            DisplaySignalMeasure();
+            break;
+        case DISPLAY_SIGNAL_OUTPUT:
+            DisplaySignalOutput();
+            break;
+        case DISPLAY_SETTINGS:
+            DisplaySettings();
+            break;
+        default:
+            break;
+    }
 }
 
 /*
@@ -54,6 +79,21 @@ void DisplayProcess(void){
  */
 void DisplayChange(void){
     /* 待实现：根据 displayState 循环切换到下一个页面。 */
+    switch(displayState) //根据当前 displayState 循环切换到下一个页面
+    {
+        case DISPLAY_SIGNAL_MEASURE:
+            displayState = DISPLAY_SIGNAL_OUTPUT;
+            break;
+        case DISPLAY_SIGNAL_OUTPUT:
+            displayState = DISPLAY_SETTINGS;
+            break;
+        case DISPLAY_SETTINGS:
+            displayState = DISPLAY_SIGNAL_MEASURE;
+            break;
+        default:
+            displayState = DISPLAY_SIGNAL_MEASURE;
+            break;
+    }
 }
 
 /*
@@ -70,6 +110,8 @@ void PrintState(void){
             break;
         case DISPLAY_SETTINGS:
             printf("Settings\r\n");
+            break;
+        default:
             break;
     }
 }
