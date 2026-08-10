@@ -8,8 +8,8 @@
 * 注    意：本文件为骨架，成员B需补全定时器配置与寄存器操作
 **********************************************************************************************************
 * 取代版本：
-* 作    者：
-* 完成日期：
+* 作    者：mayi
+* 完成日期：2026/8/8
 * 修改内容：
 * 修改文件：
 *********************************************************************************************************/
@@ -61,6 +61,38 @@ void  InitPWM(void)
   //3. 配置TIM3时基：默认PSC=7199, ARR=99（100Hz）
   //4. 配置TIM3_CH1为PWM模式1，CCR1=50（50%）
   //5. 暂不使能TIM3输出
+  
+  //1. 使能TIM3与GPIOA时钟
+  GPIO_InitTypeDef GPIO_InitStructure;
+  TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+  TIM_OCInitTypeDef TIM_OCInitStructure;
+  
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3,ENABLE);
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA,ENABLE);
+
+  //2. 配置PA6为复用推挽输出
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_Init(GPIOA,&GPIO_InitStructure);
+  
+  //3. 配置TIM3时基：默认PSC=7199, ARR=99（100Hz）
+  TIM_TimeBaseStructure.TIM_Period = 99;                 
+  TIM_TimeBaseStructure.TIM_Prescaler = 7199;              
+  TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;      //TDTS = Tck_tim,不分割
+  TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up; //向上计数模式
+  TIM_TimeBaseInit(TIM3,&TIM_TimeBaseStructure);
+  
+  //4. 配置TIM3_CH1为PWM模式1，CCR1=50（50%）
+  TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1; 
+  TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+  TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+  TIM_OCInitStructure.TIM_Pulse = 50; 
+  TIM_OC1Init(TIM3, &TIM_OCInitStructure);
+  
+  //5. 暂不使能TIM3输出
+  TIM_Cmd(TIM3, DISABLE);
+ 
   s_pwmRunning = 0;
 }
 
@@ -74,9 +106,28 @@ void  InitPWM(void)
 * 注    意：通过修改PSC实现档位切换
 *           100Hz: PSC=7199  1kHz: PSC=719  5kHz: PSC=143
 *********************************************************************************************************/
-void  PWM_SetFreq(u8 idx)
+void  PWM_SetFreq(EnumPWMFreq idx)
 {
   //TODO(成员B): 根据idx修改TIM3的PSC寄存器
+    u16 psc_val = 7199;
+    switch(idx)
+    {
+        case PWM_FREQ_100HZ:
+            psc_val = 7199;
+            break;
+        case PWM_FREQ_1KHZ:
+            psc_val = 719;
+            break;
+        case PWM_FREQ_5KHZ:
+            psc_val = 143;
+            break;
+        case PWM_FREQ_MAX:
+        default:
+            psc_val = 7199; // 非法档位默认100Hz
+            break;
+    }
+    TIM_PrescalerConfig(TIM3, psc_val, TIM_PSCReloadMode_Immediate);    // 立即更新预分频值
+    
   (void)idx;  //占位，避免编译警告
 }
 
@@ -89,9 +140,28 @@ void  PWM_SetFreq(u8 idx)
 * 创建日期：2026年08月
 * 注    意：通过修改CCR1实现档位切换
 *********************************************************************************************************/
-void  PWM_SetDuty(u8 idx)
+void  PWM_SetDuty(EnumPWMDuty idx)      //只可传入结构体内成员
 {
   //TODO(成员B): 根据idx修改TIM3的CCR1寄存器
+    u16 ccr_val = 50;
+    switch(idx)
+    {
+        case PWM_DUTY_25:
+            ccr_val = 25;
+            break;
+        case PWM_DUTY_50:
+            ccr_val = 50;
+            break;
+        case PWM_DUTY_75:
+            ccr_val = 75;
+            break;
+        case PWM_DUTY_MAX:
+        default:
+            ccr_val = 50; // 默认50%
+            break;
+    }
+    TIM_SetCompare1(TIM3, ccr_val);
+    
   (void)idx;  //占位，避免编译警告
 }
 
@@ -106,7 +176,9 @@ void  PWM_SetDuty(u8 idx)
 *********************************************************************************************************/
 void  PWM_Start(void)
 {
-  //TODO(成员B): TIM_Cmd(TIM3, ENABLE); TIM_CtrlPWMOutputs(TIM3, ENABLE);
+  //TODO(成员B): 
+  TIM_Cmd(TIM3, ENABLE); 
+  TIM_CtrlPWMOutputs(TIM3, ENABLE);
   s_pwmRunning = 1;
 }
 
@@ -121,7 +193,9 @@ void  PWM_Start(void)
 *********************************************************************************************************/
 void  PWM_Stop(void)
 {
-  //TODO(成员B): TIM_Cmd(TIM3, DISABLE); TIM_CtrlPWMOutputs(TIM3, DISABLE);
+  //TODO(成员B): 
+  TIM_Cmd(TIM3, DISABLE); 
+  TIM_CtrlPWMOutputs(TIM3, DISABLE);
   s_pwmRunning = 0;
 }
 
@@ -138,3 +212,5 @@ u8  PWM_IsRunning(void)
 {
   return s_pwmRunning;
 }
+
+
