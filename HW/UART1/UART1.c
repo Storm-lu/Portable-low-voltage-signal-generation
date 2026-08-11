@@ -104,7 +104,7 @@ static  void  ConfigUART(u32 bound)
 
 
   USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
-  USART_ITConfig(USART1, USART_IT_TXE,  ENABLE);
+  //USART_ITConfig(USART1, USART_IT_TXE,  ENABLE);
   USART_Cmd(USART1, ENABLE);
 
   s_iUARTTxSts = UART_STATE_OFF;
@@ -181,7 +181,7 @@ u8  WriteUART1(u8 *pBuf, u8 len)
 
   wLen = EnQueue(&s_structUARTSendCirQue, pBuf, len);
 
-  if(wLen < UART1_BUF_SIZE)
+  if(wLen > 0)
   {
     if(s_iUARTTxSts == UART_STATE_OFF)
     {

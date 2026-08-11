@@ -108,8 +108,8 @@ static void ConfigDAC1(void)
 static void ConfigDMA2Ch3ForDAC1(StructDACWave wave)
 {
     /* 实现 DMA2 通道 3 配置 */
-    RCC_APB1PeriphClockCmd(RCC_APB1Periph_DMA2, ENABLE);
-    DMA_DeInit(DMA2_Channel3, &DMA_InitStructure);
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA2, ENABLE);
+    DMA_DeInit(DMA2_Channel3);
 
     DMA_InitTypeDef DMA_InitStructure;
     DMA_InitStructure.DMA_PeripheralBaseAddr = DAC_DHR12R1_ADDR;
@@ -171,7 +171,6 @@ void SetDACWave(StructDACWave wave)
 void StartDAC(u16 dacValue)
 {
     /* 实现直流电压输出 */
-    DAC_Cmd(DAC_Channel_1, DISABLE);
     DMA_Cmd(DMA2_Channel3, DISABLE);
 
     DAC_SetChannel1Data(DAC_Align_12b_R, dacValue);

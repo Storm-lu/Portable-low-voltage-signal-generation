@@ -49,7 +49,7 @@ void InitKeyOne(void)
   s_arrKeyDownLevel[KEY_NAME_KEY3] = KEY_DOWN_LEVEL_KEY3;
 }
 
-
+//扫描按键
 void ScanKeyOne(u8 keyName, void(*OnKeyOneUp)(void), void(*OnKeyOneDown)(void))
 {
   static  u8  s_arrKeyVal[KEY_NAME_MAX];
@@ -87,6 +87,7 @@ void ScanKeyOne(u8 keyName, void(*OnKeyOneUp)(void), void(*OnKeyOneDown)(void))
   }
 }
 
+//判定某个按键是否被按下
 u8 IsKeyPressed(u8 keyName)
 {
   u8 val = 1;

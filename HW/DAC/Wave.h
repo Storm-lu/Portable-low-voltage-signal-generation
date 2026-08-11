@@ -29,13 +29,8 @@ void InitWave(void);
  */
 u16* GetSineWave100PointAddr(void);
 
-/*
- * 返回指向 100 点矩形波（方波）数据数组的指针。
- * 值范围：0 或 4095（50% 占空比）。
- *
- * 调用者：DAC.c -> InitDAC()、ProcHostCmd.c -> OnGenWave()
- */
-u16* GetRectWave100PointAddr(void);
+/* [FIX] 已删除 GetRectWave100PointAddr() 声明 —— Wave.c 中已移除该函数实现，
+ *       保留声明会导致潜在的链接错误。 */
 
 /*
  * 返回指向 100 点三角波数据数组的指针。

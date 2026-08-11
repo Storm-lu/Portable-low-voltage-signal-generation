@@ -86,7 +86,7 @@ static void ConfigADC1(void)
 static void ConfigDMA1Ch1(void)
 {
     /* 实现 DMA1 通道 1 配置 */
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_DMA1, ENABLE);
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
 
     DMA_InitTypeDef DMA_InitStructure;
     DMA_InitStructure.DMA_PeripheralBaseAddr = (u32)&ADC1->DR;
@@ -188,5 +188,5 @@ void GetADCStats(u16 *pAvg, u16 *pMax, u16 *pMin, u16 *pP2P)
     *pAvg = (u16)(sum / ADC_BUF_SIZE);
     *pMax = max;
     *pMin = min;
-    *pP2P = 2 * p2p;
+    *pP2P = p2p;  /* [FIX] 原为 2 * p2p，峰峰值被翻倍 */
 }

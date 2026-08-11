@@ -12,18 +12,31 @@
 #include "KeyOne.h"
 #include "IWDG.h"
 
-/* 组员模块头文件（D 组负责补全，缺任一则会编译报未定义） */
-#include "DAC.h"
-#include "Wave.h"
-#include "ADC.h"
-#include "PWM.h"
-#include "Capture.h"
-#include "OLED.h"
-#include "ProcKeyOne.h"
-#include "Flash.h"
-#include "Display.h"
-#include "SignalOutput.h"
-#include "SignalMeasure.h"
-#include "Settings.h"
+/*
+ * 待实现：为所有组员模块添加 include。
+ *
+ * 每位组员应为自己负责的模块添加对应的头文件。
+ * 在所有 include 添加完成之前，工程无法编译。
+ *
+ * A组（DAC + ADC）：
+ *   #include "DAC.h"
+ *   #include "Wave.h"
+ *   #include "ADC.h"
+ *
+ * B组（PWM + Capture）：
+ *   #include "PWM.h"
+ *   #include "Capture.h"
+ *
+ * C组（OLED + 按键 + Flash）：
+ *   #include "OLED.h"
+ *   #include "ProcKeyOne.h"
+ *   #include "Flash.h"
+ *
+ * D组（显示 + 各页面）：
+ *   #include "Display.h"
+ *   #include "SignalOutput.h"
+ *   #include "SignalMeasure.h"
+ *   #include "Settings.h"
+ */
 
 #endif

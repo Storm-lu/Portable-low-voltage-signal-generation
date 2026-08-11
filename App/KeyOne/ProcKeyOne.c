@@ -23,7 +23,7 @@ void InitProcKeyOne(void)
  */
 void  ProcKeyDownKey1(void)
 {
-  /* 待实现：检查 GetDisplayState() 并相应地分发处理。 */
+  /* 检查 GetDisplayState() 并相应地分发处理。 */
   switch (GetDisplayState())
   {
   //信号输出页 -> 切换输出启动/停止
@@ -57,7 +57,7 @@ void  ProcKeyUpKey1(void)
  */
 void  ProcKeyDownKey2(void)
 {
-  /* 待实现：若处于设置页，调用 ValueChange()。 */
+  /* 若处于设置页，调用 ValueChange()。 */
   if (GetDisplayState() == DISPLAY_SETTINGS)
   {
     ValueChange();
@@ -95,8 +95,7 @@ static int holding = 0, longPress = 0;
  */
 void  ProcKeyDownKey3(void)
 {
-  /* 待实现：
-   *   重置 d_cnt=0, longPress=0。
+  /*   重置 d_cnt=0, longPress=0。
    *   若处于设置页：holding=1（启动长按计时）。
    *   否则：holding=0，调用 DisplayChange()（短按切页）。 */
   d_cnt = 0;
@@ -130,8 +129,7 @@ void  ProcKeyDownKey3(void)
  */
 void  ProcKeyUpKey3(void)
 {
-  /* 待实现：
-   *   holding = 0。
+  /*   holding = 0。
    *   若 longPress == 1：
    *     longPress = 0, d_cnt = 0。
    *     若处于设置页：调用 SaveSettings()。
@@ -169,8 +167,7 @@ void  ProcKeyUpKey3(void)
  */
 void ProcKeyCheckKey3(void)
 {
-  /* 待实现：
-   *   若 holding == 1：
+  /*   若 holding == 1：
    *     d_cnt++
    *     若 d_cnt >= 1000：longPress = 1, holding = 0
    */

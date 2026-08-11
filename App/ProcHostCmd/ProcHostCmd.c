@@ -20,10 +20,6 @@ static u8 OnGenWave(u8* pMsg)
   {
     wave.waveBufAddr  = (u32)GetTriWave100PointAddr();
   }
-  else if(pMsg[0] == 0x02)
-  {
-    wave.waveBufAddr  = (u32)GetRectWave100PointAddr();
-  }
 
   wave.waveBufSize  = 100;
 

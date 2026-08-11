@@ -6,6 +6,7 @@
 #include "SignalOutput.h"
 #include "Flash.h"
 #include "OLED.h"
+#include "Display.h"
 
 #define FLASH_SETTINGS_ADDR  0x0803F800UL
 #define FLASH_MAGIC_NUMBER   0x12345678UL
@@ -190,10 +191,8 @@ void DisplaySettings(void){
 
         }
     }
-    else
-    {
-        current_setting = SETTING_SIGNAL_OUTPUT; //非 PWM 模式下，current_setting 锁定在 Mode
-    }
+    /* [FIX] 已删除 else { current_setting = SETTING_SIGNAL_OUTPUT; }
+     *       显示函数不应有副作用，状态修改应在 ParamChange/ValueChange 中处理 */
 
     OLEDRefreshGRAM();
 }
@@ -241,7 +240,7 @@ void ParamChange(void){
  * SETTING_PWM_DUTY：循环 pwm_duty（25%->50%->75%->25%）
  */
 void ValueChange(void){
-    /* 待实现：为每个设置项实现值循环。 */
+    /* 为每个设置项实现值循环。 */
     //进入循环
     if (current_setting == SETTING_SIGNAL_OUTPUT)
     {
@@ -301,7 +300,7 @@ void ValueChange(void){
  *   4. 返回上一页面：DisplayChange()
  */
 void SaveSettings(void){
-    /* 待实现：应用设置、写 Flash、切换页面。 */
+    /* 应用设置、写 Flash、切换页面。 */
 
     u32 buf[4];
 

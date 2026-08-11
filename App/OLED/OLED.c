@@ -566,7 +566,34 @@ void OLEDDrawWaveFormEx(u16 *pData, u8 count, u8 xStart, u8 yStart, u8 width, u8
     {
         return;  //无效参数
     }
-    
+
+    /* [FIX] 预计算自动缩放参数，移到循环外避免 O(n²) 性能问题
+     *       原代码在每个像素都遍历整个数组计算 min/max，80x128=10240次迭代 */
+    u16 preMinVal = 0;
+    u16 preMaxValData = 0;
+    u32 preRange = 0;
+    u32 prePadRange = 0;
+    u32 prePadDelta = 0;
+    u32 preDispMin = 0;
+
+    if(gain == 0)
+    {
+        u8 i;
+        preMinVal = pData[0];
+        preMaxValData = pData[0];
+        for(i = 1; i < count; i++)
+        {
+            if(pData[i] < preMinVal) preMinVal = pData[i];
+            if(pData[i] > preMaxValData) preMaxValData = pData[i];
+        }
+        preRange = (u32)(preMaxValData - preMinVal);
+        if(preRange == 0) preRange = 1;
+        prePadRange = preRange + (preRange / 4) + 4;
+        if(prePadRange == 0) prePadRange = 1;
+        prePadDelta = (prePadRange > preRange) ? ((prePadRange - preRange) / 2) : 0;
+        preDispMin = (preMinVal > prePadDelta) ? (u32)(preMinVal - prePadDelta) : 0;
+    }
+
     for(x = 0; x<width; x++)
     {
       u8 idx;
@@ -589,60 +616,21 @@ void OLEDDrawWaveFormEx(u16 *pData, u8 count, u8 xStart, u8 yStart, u8 width, u8
 
       sample = pData[idx];//获取采样值
 
-      if(gain == 0)//自动缩放
+      if(gain == 0)//自动缩放：[FIX] 使用循环外预计算的值，不再重复遍历数组
       {
-        u16 minVal = pData[0];//初始化最小值
-        u16 maxValData = pData[0];//初始化最大值
-
-        u8 i;
-        u32 range;
-        u32 padRange;
-        u32 padDelta;
-        u32 dispMin;
-        i32 delta;
-
-        for(i = 1; i<count; i++)
-        {
-          if(pData[i] < minVal)//更新最小值
-          {
-            minVal = pData[i];
-          }
-          if(pData[i] > maxValData)//更新最大值
-          {
-            maxValData = pData[i];
-          }
-        }
-
-        range = (u32)(maxValData - minVal);//计算范围
-        if(range == 0)
-        {
-          range = 1;  //防止除以0
-        }
-
-        padRange = range + (range / 4) + 4; //增加25%边距
-        if(padRange == 0)
-        {
-          padRange = 1;  //防止除以0
-        }
-
-        //如果 padRange 大于 range，计算边距差值，否则 padDelta 为0
-        padDelta = (padRange > range) ? ((padRange - range) / 2) : 0;//计算边距差值
-        //计算显示的最小值，防止下溢
-        dispMin = (minVal > padDelta) ? (u32)(minVal - padDelta) : 0;//防止下溢
-
-        delta = (i32)sample - (i32)dispMin;
+        i32 delta = (i32)sample - (i32)preDispMin;
 
         if(delta < 0)
         {
           delta = 0;  //防止下溢
         }
 
-        if((u32)delta > padRange)
+        if((u32)delta > prePadRange)
         {
-          delta = (i32)padRange;  //防止上溢
+          delta = (i32)prePadRange;  //防止上溢
         }
 
-        curY = (u8)(yStart + (yHeight - 1) - ((u32)delta * yHeight / padRange));//映射到屏幕坐标
+        curY = (u8)(yStart + (yHeight - 1) - ((u32)delta * yHeight / prePadRange));//映射到屏幕坐标
       }
 
       else//固定增益模式

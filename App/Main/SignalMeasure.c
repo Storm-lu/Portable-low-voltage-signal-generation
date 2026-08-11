@@ -11,7 +11,8 @@
 #define WAVE_Y_START    0
 #define WAVE_WIDTH      80
 #define WAVE_HEIGHT     48
-#define ADC_BUF_SIZE    128
+/* [FIX] 已删除重复的 #define ADC_BUF_SIZE 128 —— ADC.h 中已有定义，
+ *       重复定义可能导致维护不一致。 */
 void InitSignalMeasure(void){
     /* 目前无需初始化。 */
 }
@@ -85,8 +86,8 @@ static void ShowFreqText(u8 x,u8 y, u32 Freq)
     if (Freq < 1000)
     {
         OLEDShowString(x, y, (const u8*)"F:");
-        OLEDShowNum((u8)(x + 16), y, Freq, 4, 16);
-        OLEDShowChar((u8)(x + 48), y, 'H', 16, 1);
+        OLEDShowNum((u8)(x + 16), y, Freq, 3, 16);  /* [FIX] 4位改3位，避免 'H' 字符越界 */
+        OLEDShowChar((u8)(x + 40), y, 'H', 16, 1);  /* [FIX] x+48 越界(80+48=128>127)，改为 x+40 */
     }
     else if(Freq <10000)
     {

@@ -21,7 +21,6 @@ static u8 s_displayCnt = 0;
  */
 void InitDisplay(void)
 {
-    /* 待实现：按上述说明实现。 */
     displayState = DISPLAY_SIGNAL_MEASURE; //初始页面为信号测量
     s_displayCnt = 0; //复位帧计数器清零
 
@@ -43,14 +42,8 @@ void InitDisplay(void)
  *   DISPLAY_SETTINGS       -> DisplaySettings()
  */
 void DisplayProcess(void){
-    /* 待实现：
-     *   s_displayCnt++;
-     *   if(s_displayCnt < 50) return;
-     *   s_displayCnt = 0;
-     *   switch(displayState) { ... 调用对应的显示函数 ... } */
-
     s_displayCnt++;//计数器加1
-    if(s_displayCnt < 50) return; //如果计数器小于50，则返回
+    if(s_displayCnt < 75) return; //如果计数器小于50，则返回
     s_displayCnt = 0; //计数器复位为0
 
     switch(displayState) //根据当前 displayState 调用对应的显示函数
@@ -78,7 +71,7 @@ void DisplayProcess(void){
  * 只有长按（2秒）通过 SaveSettings() 退出设置页面。
  */
 void DisplayChange(void){
-    /* 待实现：根据 displayState 循环切换到下一个页面。 */
+    /* 根据 displayState 循环切换到下一个页面。 */
     switch(displayState) //根据当前 displayState 循环切换到下一个页面
     {
         case DISPLAY_SIGNAL_MEASURE:

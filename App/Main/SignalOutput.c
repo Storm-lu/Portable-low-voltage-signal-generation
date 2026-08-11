@@ -5,6 +5,7 @@
 #include "DAC.h"
 #include "PWM.h"
 #include "Settings.h"
+#include "OLED.h"
 
 static SignalOutputType signal_mode;
 static u8 signal_state = 0;
