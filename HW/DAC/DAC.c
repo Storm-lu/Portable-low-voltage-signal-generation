@@ -1,213 +1,237 @@
-/*********************************************************************************************************
-* Ä£¿éÃû³Æ£ºDAC.c
-* Õª    Òª£ºDACÄ£¿é
-* µ±Ç°°æ±¾£º1.0.0
-* ×÷    Õß£ºSZLY(COPYRIGHT 2018 - 2020 SZLY. All rights reserved.)
-* Íê³ÉÈÕÆÚ£º2020Äê01ÔÂ01ÈÕ 
-* ÄÚ    ÈÝ£º
-* ×¢    Òâ£º                                                                  
-**********************************************************************************************************
-* È¡´ú°æ±¾£º
-* ×÷    Õß£º
-* Íê³ÉÈÕÆÚ£º
-* ÐÞ¸ÄÄÚÈÝ£º
-* ÐÞ¸ÄÎÄ¼þ£º
-*********************************************************************************************************/
-
-/*********************************************************************************************************
-*                                              °üº¬Í·ÎÄ¼þ
-*********************************************************************************************************/
 #include "DAC.h"
 #include "Wave.h"
 #include "stm32f10x_conf.h"
 
-/*********************************************************************************************************
-*                                              ºê¶¨Òå
-*********************************************************************************************************/
-#define DAC_DHR12R1_ADDR    ((u32)0x40007408)   //DAC1µÄµØÖ·£¨12Î»ÓÒ¶ÔÆë£©
 
-/*********************************************************************************************************
-*                                              Ã¶¾Ù½á¹¹Ìå¶¨Òå
-*********************************************************************************************************/
+/*
+ * DAC1 12 ä½å³å¯¹é½æ•°æ®ä¿æŒå¯„å­˜å™¨åœ°å€ã€‚
+ * DMA å°†æ³¢å½¢é‡‡æ ·æ•°æ®å†™å…¥æ­¤å¯„å­˜å™¨ã€‚
+ */
+#define DAC_DHR12R1_ADDR    ((u32)0x40007408)
 
-/*********************************************************************************************************
-*                                              ÄÚ²¿±äÁ¿
-*********************************************************************************************************/
-static StructDACWave s_strDAC1WaveBuf;  //´æ´¢DAC1²¨ÐÎÊôÐÔ£¬°üÀ¨²¨ÐÎµØÖ·ºÍµãÊý
 
-/*********************************************************************************************************
-*                                              ÄÚ²¿º¯ÊýÉùÃ÷
-*********************************************************************************************************/
-static  void ConfigTimer4(u16 arr, u16 psc);            //ÅäÖÃTIM4
-static  void ConfigDAC1(void);                          //ÅäÖÃDAC1
-static  void ConfigDMA2Ch3ForDAC1(StructDACWave wave);  //ÅäÖÃDMA2Í¨µÀ3
-                                          
-/*********************************************************************************************************
-*                                              ÄÚ²¿º¯ÊýÊµÏÖ
-*********************************************************************************************************/
-/*********************************************************************************************************
-* º¯ÊýÃû³Æ£ºConfigTimer4
-* º¯Êý¹¦ÄÜ£ºÅäÖÃTIM4
-* ÊäÈë²ÎÊý£ºarr-×Ô¶¯ÖØ×°Öµ£¬psc-Ô¤·ÖÆµÆ÷Öµ
-* Êä³ö²ÎÊý£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£ºDACÃ¿Á½¸öµãÖ®¼äµÄÊ±¼ä²îÎª(arr+1)*(psc+1)/72(us)£¬100¸öµã£¬ÖÜÆÚ¼´Îª1ms
-*********************************************************************************************************/
-static  void ConfigTimer4(u16 arr, u16 psc)
+/*
+ * å½“å‰æ³¢å½¢ç¼“å†²åŒºæè¿°ç¬¦ã€‚
+ * ç”± SetDACWaveTri/SetDACWaveSine æ›´æ–°ï¼Œç”± StartDACWave è¯»å–ã€‚
+ */
+static StructDACWave s_strDAC1WaveBuf;
+
+
+/* ---- å†…éƒ¨å‡½æ•°å£°æ˜Ž ---- */
+static void ConfigTimer4(u16 arr, u16 psc);
+static void ConfigDAC1(void);
+static void ConfigDMA2Ch3ForDAC1(StructDACWave wave);
+
+
+/*
+ * é…ç½® TIM4 ä½œä¸º DAC è§¦å‘æºã€‚
+ *
+ * æ—¶é’Ÿï¼šAPB1 = 72MHz
+ * è®¡æ•°é¢‘çŽ‡ = 72MHz / (PSC+1)
+ * è§¦å‘é¢‘çŽ‡ = è®¡æ•°é¢‘çŽ‡ / (ARR+1) = DAC é‡‡æ ·çŽ‡
+ *
+ * æ‰€éœ€è®¾ç½®ï¼š
+ *   - TIM_TRGOSource_Updateï¼šåœ¨æ¯æ¬¡æ›´æ–°äº‹ä»¶æ—¶è§¦å‘ DAC
+ *   - å‘ä¸Šè®¡æ•°æ¨¡å¼
+ *
+ * ç¤ºä¾‹ï¼šarr=99, psc=71 -> 72MHz/72/100 = 10kHz é‡‡æ ·çŽ‡
+ *       æ­é… 100 ç‚¹æ³¢å½¢ -> 100Hz è¾“å‡ºé¢‘çŽ‡
+ */
+static void ConfigTimer4(u16 arr, u16 psc) //Auto-reload Register & Prescaler
 {
-  TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;   //TIM_TimeBaseStructureÓÃÓÚ´æ·Å¶¨Ê±Æ÷µÄ²ÎÊý
-  
-  //Ê¹ÄÜRCCÏà¹ØÊ±ÖÓ
-  RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);   //Ê¹ÄÜ¶¨Ê±Æ÷µÄÊ±ÖÓ
-  
-  //ÅäÖÃTIM4
-  TIM_DeInit(TIM4);                                 //ÖØÖÃÎªÈ±Ê¡Öµ
-  TIM_TimeBaseStructure.TIM_Period        = arr;    //ÉèÖÃ×Ô¶¯ÖØ×°ÔØÖµ   
-  TIM_TimeBaseStructure.TIM_Prescaler     = psc;    //ÉèÖÃÔ¤·ÖÆµÆ÷Öµ    
-  TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;        //ÉèÖÃÊ±ÖÓ·Ö¸î£ºtDTS = tCK_INT
-  TIM_TimeBaseStructure.TIM_CounterMode   = TIM_CounterMode_Up;  //ÉèÖÃÏòÉÏ¼ÆÊýÄ£Ê½ 
-  TIM_TimeBaseInit(TIM4, &TIM_TimeBaseStructure);                //¸ù¾Ý²ÎÊý³õÊ¼»¯¶¨Ê±Æ÷
+    /* å®žçŽ° TIM4 é…ç½® */
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
 
-  TIM_SelectOutputTrigger(TIM4, TIM_TRGOSource_Update);          //Ñ¡Ôñ¸üÐÂÊÂ¼þÎª´¥·¢ÊäÈë
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
 
-  TIM_Cmd(TIM4, ENABLE);  //Ê¹ÄÜ¶¨Ê±Æ÷
-} 
+    TIM_DeInit(TIM4);
+    TIM_TimeBaseStructure.TIM_Period = arr;
+    TIM_TimeBaseStructure.TIM_Prescaler = psc;
+    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
 
-/*********************************************************************************************************
-* º¯ÊýÃû³Æ£ºConfigDAC1
-* º¯Êý¹¦ÄÜ£ºÅäÖÃDAC1£¬DAC1Í¨¹ýPA4Êä³ö
-* ÊäÈë²ÎÊý£ºvoid
-* Êä³ö²ÎÊý£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£ºÎª±ÜÃâ¼ÄÉú¸ÉÈÅºÍ¶îÍâ¹¦ºÄ£¬GPIOÄ£Ê½½¨ÒéÉèÖÃÎªÄ£ÄâÊäÈë
-*********************************************************************************************************/
-static  void ConfigDAC1(void)
-{
-  GPIO_InitTypeDef  GPIO_InitStructure; //GPIO_InitStructureÓÃÓÚ´æ·ÅGPIOµÄ²ÎÊý
-  DAC_InitTypeDef   DAC_InitStructure;  //DAC_InitStructureÓÃÓÚ´æ·ÅDACµÄ²ÎÊý
+    TIM_TimeBaseInit(TIM4, &TIM_TimeBaseStructure);
 
-  //Ê¹ÄÜRCCÏà¹ØÊ±ÖÓ
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);  //Ê¹ÄÜGPIOAµÄÊ±ÖÓ
-  RCC_APB1PeriphClockCmd(RCC_APB1Periph_DAC, ENABLE);    //Ê¹ÄÜDACµÄÊ±ÖÓ
-  
-  //ÅäÖÃDAC1µÄGPIO
-  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_4;            //ÉèÖÃÒý½Å
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;      //ÉèÖÃI/OÊä³öËÙ¶È
-  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AIN;         //ÉèÖÃÊäÈëÀàÐÍ
-  GPIO_Init(GPIOA, &GPIO_InitStructure);                 //¸ù¾Ý²ÎÊý³õÊ¼»¯GPIO
-  
-  //ÅäÖÃDAC1
-  DAC_InitStructure.DAC_Trigger = DAC_Trigger_T4_TRGO;            //ÉèÖÃDAC´¥·¢
-  DAC_InitStructure.DAC_WaveGeneration = DAC_WaveGeneration_None; //¹Ø±Õ²¨ÐÎ·¢ÉúÆ÷
-  DAC_InitStructure.DAC_LFSRUnmask_TriangleAmplitude = DAC_LFSRUnmask_Bit0; //²»ÆÁ±ÎLSFRÎ»0/Èý½Ç²¨·ùÖµµÈÓÚ1
-  DAC_InitStructure.DAC_OutputBuffer = DAC_OutputBuffer_Enable;   //Ê¹ÄÜDACÊä³ö»º´æ
-  DAC_Init(DAC_Channel_1, &DAC_InitStructure);    //³õÊ¼»¯DACÍ¨µÀ1
+    TIM_SelectOutputTrigger(TIM4, TIM_TRGOSource_Update);
 
-  DAC_DMACmd(DAC_Channel_1, ENABLE);              //Ê¹ÄÜDACÍ¨µÀ1µÄDMAÄ£Ê½
- 
-  DAC_SetChannel1Data(DAC_Align_12b_R, 0);        //ÉèÖÃÎª12Î»ÓÒ¶ÔÆëÊý¾Ý¸ñÊ½
-  
-  DAC_Cmd(DAC_Channel_1, ENABLE);                 //Ê¹ÄÜDACÍ¨µÀ1
+    TIM_Cmd(TIM4, ENABLE);
 }
 
-/*********************************************************************************************************
-* º¯ÊýÃû³Æ£ºConfigDMA2Ch3ForDAC1
-* º¯Êý¹¦ÄÜ£ºÅäÖÃDMA2Í¨µÀ3
-* ÊäÈë²ÎÊý£ºwave£¬°üÀ¨²¨ÐÎµØÖ·ºÍµãÊý
-* Êä³ö²ÎÊý£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º
-*********************************************************************************************************/
-static  void ConfigDMA2Ch3ForDAC1(StructDACWave wave)
-{  
-  DMA_InitTypeDef   DMA_InitStructure;  //DMA_InitStructureÓÃÓÚ´æ·ÅDMAµÄ²ÎÊý
-  NVIC_InitTypeDef  NVIC_InitStructure; //NVIC_InitStructureÓÃÓÚ´æ·ÅNVICµÄ²ÎÊý
 
-  //Ê¹ÄÜRCCÏà¹ØÊ±ÖÓ
-  RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA2, ENABLE);  //Ê¹ÄÜDMA2µÄÊ±ÖÓ  
-  
-  //ÅäÖÃDMA2_Channel3
-  DMA_DeInit(DMA2_Channel3);  //½«DMA1_CH1¼Ä´æÆ÷ÉèÖÃÎªÄ¬ÈÏÖµ
-  DMA_InitStructure.DMA_PeripheralBaseAddr = DAC_DHR12R1_ADDR;     //ÉèÖÃÍâÉèµØÖ·
-  DMA_InitStructure.DMA_MemoryBaseAddr     = wave.waveBufAddr;     //ÉèÖÃ´æ´¢Æ÷µØÖ·
-  DMA_InitStructure.DMA_BufferSize         = wave.waveBufSize;     //ÉèÖÃÒª´«ÊäµÄÊý¾ÝÏîÊýÄ¿                                              
-  DMA_InitStructure.DMA_DIR                = DMA_DIR_PeripheralDST;//ÉèÖÃÎª´æ´¢Æ÷µ½ÍâÉèÄ£Ê½
-  DMA_InitStructure.DMA_PeripheralInc      = DMA_PeripheralInc_Disable;  //ÉèÖÃÍâÉèÎª·ÇµÝÔöÄ£Ê½
-  DMA_InitStructure.DMA_MemoryInc          = DMA_MemoryInc_Enable;       //ÉèÖÃ´æ´¢Æ÷ÎªµÝÔöÄ£Ê½
-  DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord; //ÉèÖÃÍâÉèÊý¾Ý³¤¶ÈÎª°ë×Ö
-  DMA_InitStructure.DMA_MemoryDataSize     = DMA_MemoryDataSize_HalfWord;	    //ÉèÖÃ´æ´¢Æ÷Êý¾Ý³¤¶ÈÎª°ë×Ö
-  DMA_InitStructure.DMA_Mode               = DMA_Mode_Circular;    //ÉèÖÃÎªÑ­»·Ä£Ê½
-  DMA_InitStructure.DMA_Priority           = DMA_Priority_High;    //ÉèÖÃÎª¸ßÓÅÏÈ¼¶
-  DMA_InitStructure.DMA_M2M                = DMA_M2M_Disable;      //½ûÖ¹´æ´¢Æ÷µ½´æ´¢Æ÷·ÃÎÊ
-  DMA_Init(DMA2_Channel3, &DMA_InitStructure); //¸ù¾Ý²ÎÊý³õÊ¼»¯DMA2_Channel3
-
-  //ÅäÖÃNVIC
-  NVIC_InitStructure.NVIC_IRQChannel = DMA2_Channel3_IRQn;   //ÖÐ¶ÏÍ¨µÀºÅ
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;  //ÉèÖÃÇÀÕ¼ÓÅÏÈ¼¶
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;         //ÉèÖÃ×ÓÓÅÏÈ¼¶
-  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;            //Ê¹ÄÜÖÐ¶Ï
-  NVIC_Init(&NVIC_InitStructure);                            //¸ù¾Ý²ÎÊý³õÊ¼»¯NVIC 
-
-  DMA_ITConfig(DMA2_Channel3, DMA_IT_TC, ENABLE);  //Ê¹ÄÜDMA2_Channel3µÄ´«ÊäÍê³ÉÖÐ¶Ï 
-
-  DMA_Cmd(DMA2_Channel3, ENABLE);                  //Ê¹ÄÜDMA2_Channel3
-}
-
-/*********************************************************************************************************
-* º¯ÊýÃû³Æ£ºDMA2_Channel3_IRQHandler
-* º¯Êý¹¦ÄÜ£ºDMA2_Channel3µÄÖÐ¶Ï·þÎñº¯Êý
-* ÊäÈë²ÎÊý£ºvoid
-* Êä³ö²ÎÊý£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º
-*********************************************************************************************************/
-void DMA2_Channel3_IRQHandler(void)
+/*
+ * é…ç½® DAC é€šé“ 1 è¾“å‡ºï¼ˆPA4ï¼‰ã€‚
+ *
+ * æ‰€éœ€è®¾ç½®ï¼š
+ *   - PA4ï¼šGPIO_Mode_AINï¼ˆæ¨¡æ‹Ÿè¾“å…¥ï¼‰
+ *   - DAC è§¦å‘ï¼šDAC_Trigger_T4_TRGOï¼ˆç”± TIM4 è§¦å‘ï¼‰
+ *   - DAC è¾“å‡ºç¼“å†²ï¼šä½¿èƒ½
+ *   - åˆå§‹æ•°æ®ï¼š0
+ *   - ä½¿èƒ½ DAC é€šé“ 1
+ */
+static void ConfigDAC1(void)
 {
-  if(DMA_GetITStatus(DMA2_IT_TC3))  //ÅÐ¶ÏDMA2_Channel3´«ÊäÍê³ÉÖÐ¶ÏÊÇ·ñ·¢Éú
-  {
-    NVIC_ClearPendingIRQ(DMA2_Channel3_IRQn);  //Çå³ýDMA2_Channel3ÖÐ¶Ï¹ÒÆð
-    DMA_ClearITPendingBit(DMA2_IT_GL3);        //Çå³ýDMA2_Channel3´«ÊäÍê³ÉÖÐ¶Ï±êÖ¾
+    /* å®žçŽ° DAC1 + PA4 GPIO é…ç½® */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_DAC, ENABLE);
 
-    ConfigDMA2Ch3ForDAC1(s_strDAC1WaveBuf);    //ÅäÖÃDMA2Í¨µÀ3
-  }
+
+    GPIO_InitTypeDef GPIO_InitStructure;
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    DAC_InitTypeDef DAC_InitStructure;
+    DAC_InitStructure.DAC_Trigger = DAC_Trigger_T4_TRGO;
+    DAC_InitStructure.DAC_OutputBuffer = DAC_OutputBuffer_Enable;
+    DAC_Init(DAC_Channel_1, &DAC_InitStructure);
+
+    DAC_SetChannel1Data(DAC_Align_12b_R, 0);
+
+    DAC_Cmd(DAC_Channel_1, ENABLE);
 }
 
-/*********************************************************************************************************
-*                                              APIº¯ÊýÊµÏÖ
-*********************************************************************************************************/
-/*********************************************************************************************************
-* º¯ÊýÃû³Æ£ºInitDAC
-* º¯Êý¹¦ÄÜ£º³õÊ¼»¯DACÄ£¿é 
-* ÊäÈë²ÎÊý£ºvoid
-* Êä³ö²ÎÊý£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º
-*********************************************************************************************************/
+
+/*
+ * é…ç½® DMA2 é€šé“ 3ï¼Œå°†æ³¢å½¢æ•°æ®ä¼ é€è‡³ DAC1ã€‚
+ *
+ * æ‰€éœ€è®¾ç½®ï¼š
+ *   - æ–¹å‘ï¼šå­˜å‚¨å™¨ -> å¤–è®¾
+ *   - å¤–è®¾åœ°å€ï¼šDAC_DHR12R1_ADDR (0x40007408)
+ *   - å­˜å‚¨å™¨åœ°å€ï¼šwave.waveBufAddr
+ *   - ç¼“å†²åŒºå¤§å°ï¼šwave.waveBufSize
+ *   - æ¨¡å¼ï¼šå¾ªçŽ¯ï¼ˆæ— é™å¾ªçŽ¯è¾“å‡ºæ³¢å½¢ï¼‰
+ *   - æ•°æ®å¤§å°ï¼šå¤–è®¾å’Œå­˜å‚¨å™¨å‡ä¸ºåŠå­—ï¼ˆ16 ä½ï¼‰
+ *   - å¤–è®¾åœ°å€è‡ªå¢žï¼šç¦æ­¢ï¼Œå­˜å‚¨å™¨åœ°å€è‡ªå¢žï¼šä½¿èƒ½
+ *   - ä¼˜å…ˆçº§ï¼šé«˜
+ */
+static void ConfigDMA2Ch3ForDAC1(StructDACWave wave)
+{
+    /* å®žçŽ° DMA2 é€šé“ 3 é…ç½® */
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA2, ENABLE);
+    DMA_DeInit(DMA2_Channel3);
+
+    DMA_InitTypeDef DMA_InitStructure;
+    DMA_InitStructure.DMA_PeripheralBaseAddr = DAC_DHR12R1_ADDR;
+    DMA_InitStructure.DMA_MemoryBaseAddr = wave.waveBufAddr;
+    DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralDST;
+    DMA_InitStructure.DMA_BufferSize = wave.waveBufSize;
+    DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
+    DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;
+    DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord;
+    DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;
+    DMA_InitStructure.DMA_Mode = DMA_Mode_Circular;
+    DMA_InitStructure.DMA_Priority = DMA_Priority_High;
+    DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
+
+    DMA_Init(DMA2_Channel3, &DMA_InitStructure);
+    DMA_Cmd(DMA2_Channel3, ENABLE);
+}
+
+/*
+ * åˆå§‹åŒ– DAC ç³»ç»Ÿã€‚
+ *
+ * æ­¥éª¤ï¼š
+ *   1. è®¾ç½®é»˜è®¤æ³¢å½¢ä¸ºä¸‰è§’æ³¢ï¼ˆæ¥è‡ª Wave æ¨¡å—çš„ 100 ç‚¹ï¼‰
+ *   2. è°ƒç”¨ ConfigDAC1() é…ç½® PA4 å’Œ DAC é€šé“ 1
+ *   3. è°ƒç”¨ ConfigTimer4(99, 71) è®¾ç½® 10kHz é‡‡æ ·çŽ‡ï¼ˆ= 100Hz æ³¢å½¢ï¼‰
+ *
+ * æ³¨æ„ï¼šæ­¤å¤„ä¸è¦ä½¿èƒ½ DAC DMAã€‚DMA ç¨åŽç”± StartDACWave() å¯åŠ¨ã€‚
+ */
 void InitDAC(void)
-{              
-  s_strDAC1WaveBuf.waveBufAddr  = (u32)GetSineWave100PointAddr(); //²¨ÐÎµØÖ·
-  s_strDAC1WaveBuf.waveBufSize  = 100;                            //²¨ÐÎµãÊý  
-
-  ConfigDAC1(); //ÅäÖÃDAC1
-  ConfigTimer4(799, 719);   //100KHz£¬¼ÆÊýµ½800Îª8ms   
-  ConfigDMA2Ch3ForDAC1(s_strDAC1WaveBuf); //ÅäÖÃDMA2Í¨µÀ3
+{
+    /* åˆå§‹åŒ– DAC ç³»ç»Ÿ */
+    SetDACWaveTri();
+    ConfigDAC1();
+    ConfigTimer4(99, 71);
 }
 
-/*********************************************************************************************************
-* º¯ÊýÃû³Æ£ºSetDACWave
-* º¯Êý¹¦ÄÜ£ºÉèÖÃDAC²¨ÐÎÊôÐÔ 
-* ÊäÈë²ÎÊý£ºwave£¬°üÀ¨²¨ÐÎµØÖ·ºÍµãÊý
-* Êä³ö²ÎÊý£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º
-*********************************************************************************************************/
+
+/*
+ * æ›´æ–°å†…éƒ¨æ³¢å½¢ç¼“å†²åŒºæè¿°ç¬¦ã€‚
+ * ç”± SetDACWaveTri/SetDACWaveSine è°ƒç”¨ï¼Œç”¨äºŽåˆ‡æ¢æ³¢å½¢æ•°æ®ã€‚
+ */
 void SetDACWave(StructDACWave wave)
 {
-  s_strDAC1WaveBuf = wave;  //¸ù¾ÝwaveÉèÖÃDAC²¨ÐÎÊôÐÔ	
+    /* æ›´æ–° s_strDAC1WaveBuf */
+    s_strDAC1WaveBuf = wave;
+}
+
+
+/*
+ * åœ¨ PA4 ä¸Šè¾“å‡ºç›´æµç”µåŽ‹ã€‚
+ *
+ * æ­¥éª¤ï¼š
+ *   1. ç¦ç”¨ DAC DMA å’Œ DMA2 é€šé“ 3ï¼ˆåœæ­¢ä»»ä½•æ³¢å½¢è¾“å‡ºï¼‰
+ *   2. å°† dacValue ç›´æŽ¥å†™å…¥ DAC æ•°æ®å¯„å­˜å™¨
+ *
+ * dacValueï¼š12 ä½å€¼ï¼ˆ0~4095ï¼‰
+ *   0V -> 0, 1.0V -> 1241, 2.0V -> 2482, 3.3V -> 4095
+ */
+void StartDAC(u16 dacValue)
+{
+    /* å®žçŽ°ç›´æµç”µåŽ‹è¾“å‡º */
+    DMA_Cmd(DMA2_Channel3, DISABLE);
+
+    DAC_SetChannel1Data(DAC_Align_12b_R, dacValue);
+}
+
+
+/*
+ * åœ¨ PA4 ä¸Šå¯åŠ¨ DMA é©±åŠ¨çš„æ³¢å½¢è¾“å‡ºã€‚
+ *
+ * æ­¥éª¤ï¼š
+ *   1. ä½¿ç”¨å½“å‰æ³¢å½¢ç¼“å†²åŒºï¼ˆs_strDAC1WaveBufï¼‰é…ç½® DMA2 é€šé“ 3
+ *   2. ä½¿èƒ½ DAC DMA è¯·æ±‚ï¼ˆDAC_DMACmdï¼‰
+ *
+ * æ³¢å½¢å°†é€šè¿‡ DMA å¾ªçŽ¯æ¨¡å¼æŒç»­å¾ªçŽ¯è¾“å‡ºã€‚
+ * TIM4 ä»¥ InitDAC ä¸­è®¾ç½®çš„é‡‡æ ·çŽ‡è§¦å‘ DAC è½¬æ¢ã€‚
+ */
+void StartDACWave(void)
+{
+    /* å¯åŠ¨ DMA é©±åŠ¨çš„æ³¢å½¢è¾“å‡º */
+    ConfigDMA2Ch3ForDAC1(s_strDAC1WaveBuf);
+    DAC_DMACmd(DAC_Channel_1, ENABLE);
+}
+
+
+/*
+ * åœæ­¢æ‰€æœ‰ DAC è¾“å‡ºã€‚
+ *
+ * æ­¥éª¤ï¼š
+ *   1. ç¦ç”¨ DAC DMA è¯·æ±‚
+ *   2. ç¦ç”¨ DMA2 é€šé“ 3
+ *   3. å°† DAC è¾“å‡ºè®¾ä¸º 0
+ */
+void StopDAC(void)
+{
+    /* åœæ­¢ DAC è¾“å‡º */
+    DAC_DMACmd(DAC_Channel_1, DISABLE);
+    DMA_Cmd(DMA2_Channel3, DISABLE);
+  
+    DAC_SetChannel1Data(DAC_Align_12b_R, 0);
+}
+
+
+/*
+ * åˆ‡æ¢æ³¢å½¢ä¸ºä¸‰è§’æ³¢ã€‚
+ * ä»Ž Wave æ¨¡å—èŽ·å–ä¸‰è§’æ³¢æ•°æ®åœ°å€å¹¶æ›´æ–°ç¼“å†²åŒºæè¿°ç¬¦ã€‚
+ */
+void SetDACWaveTri(void)
+{
+    /* è®¾ç½®æ³¢å½¢ä¸ºä¸‰è§’æ³¢ï¼ˆ100 ç‚¹ï¼‰ */
+    s_strDAC1WaveBuf.waveBufAddr  = (u32)GetTriWave100PointAddr();
+    s_strDAC1WaveBuf.waveBufSize  = 100;
+}
+
+
+/*
+ * åˆ‡æ¢æ³¢å½¢ä¸ºæ­£å¼¦æ³¢ã€‚
+ * ä»Ž Wave æ¨¡å—èŽ·å–æ­£å¼¦æ³¢æ•°æ®åœ°å€å¹¶æ›´æ–°ç¼“å†²åŒºæè¿°ç¬¦ã€‚
+ */
+void SetDACWaveSine(void)
+{
+    /* è®¾ç½®æ³¢å½¢ä¸ºæ­£å¼¦æ³¢ï¼ˆ100 ç‚¹ï¼‰ */
+    s_strDAC1WaveBuf.waveBufAddr  = (u32)GetSineWave100PointAddr();
+    s_strDAC1WaveBuf.waveBufSize  = 100;
 }

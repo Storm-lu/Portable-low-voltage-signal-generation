@@ -1,150 +1,110 @@
-/*********************************************************************************************************
-* Ä£¿éÃû³Æ£ºKeyOne.c
-* Õª    Òª£ºKeyOneÄ£¿é£¬½øĞĞ¶ÀÁ¢°´¼ü³õÊ¼»¯£¬ÒÔ¼°°´¼üÉ¨Ãèº¯ÊıÊµÏÖ
-* µ±Ç°°æ±¾£º1.0.0
-* ×÷    Õß£ºSZLY(COPYRIGHT 2018 - 2020 SZLY. All rights reserved.)
-* Íê³ÉÈÕÆÚ£º2020Äê01ÔÂ01ÈÕ  
-* ÄÚ    Èİ£º
-* ×¢    Òâ£º                                                                  
-**********************************************************************************************************
-* È¡´ú°æ±¾£º
-* ×÷    Õß£º
-* Íê³ÉÈÕÆÚ£º
-* ĞŞ¸ÄÄÚÈİ£º
-* ĞŞ¸ÄÎÄ¼ş£º
-*********************************************************************************************************/
-
-/*********************************************************************************************************
-*                                              °üº¬Í·ÎÄ¼ş
-*********************************************************************************************************/
 #include "KeyOne.h"
 #include "stm32f10x_conf.h"
 
-/*********************************************************************************************************
-*                                              ºê¶¨Òå
-*********************************************************************************************************/
-//KEY1Îª¶ÁÈ¡PC1Òı½ÅµçÆ½
-#define KEY1    (GPIO_ReadInputDataBit(GPIOC, GPIO_Pin_1)) 
-//KEY2Îª¶ÁÈ¡PC2Òı½ÅµçÆ½
-#define KEY2    (GPIO_ReadInputDataBit(GPIOC, GPIO_Pin_2)) 
-//KEY3Îª¶ÁÈ¡PA0Òı½ÅµçÆ½
-#define KEY3    (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0))  
 
-/*********************************************************************************************************
-*                                              Ã¶¾Ù½á¹¹Ìå¶¨Òå
-*********************************************************************************************************/
+#define KEY1    (GPIO_ReadInputDataBit(GPIOC, GPIO_Pin_1))
 
-/*********************************************************************************************************
-*                                              ÄÚ²¿±äÁ¿
-*********************************************************************************************************/
-//°´¼ü°´ÏÂÊ±µÄµçÑ¹£¬0xFF±íÊ¾°´ÏÂÎª¸ßµçÆ½£¬0x00±íÊ¾°´ÏÂÎªµÍµçÆ½
-static  u8  s_arrKeyDownLevel[KEY_NAME_MAX];      //Ê¹ÓÃÇ°ÒªÔÚInitKeyOneº¯ÊıÖĞ½øĞĞ³õÊ¼»¯   
+#define KEY2    (GPIO_ReadInputDataBit(GPIOC, GPIO_Pin_2))
 
-/*********************************************************************************************************
-*                                              ÄÚ²¿º¯ÊıÉùÃ÷
-*********************************************************************************************************/
-static  void  ConfigKeyOneGPIO(void); //ÅäÖÃ°´¼üµÄGPIO 
+#define KEY3    (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0))
 
-/*********************************************************************************************************
-*                                              ÄÚ²¿º¯ÊıÊµÏÖ
-*********************************************************************************************************/
-/*********************************************************************************************************
-* º¯ÊıÃû³Æ£ºConfigKeyOneGPIO
-* º¯Êı¹¦ÄÜ£ºÅäÖÃ°´¼üµÄGPIO 
-* ÊäÈë²ÎÊı£ºvoid 
-* Êä³ö²ÎÊı£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º
-*********************************************************************************************************/
+
+static  u8  s_arrKeyDownLevel[KEY_NAME_MAX];
+
+
+static  void  ConfigKeyOneGPIO(void);
+
+
 static  void  ConfigKeyOneGPIO(void)
 {
-  GPIO_InitTypeDef GPIO_InitStructure;  //GPIO_InitStructureÓÃÓÚ´æ·ÅGPIOµÄ²ÎÊı
-  
-  //Ê¹ÄÜRCCÏà¹ØÊ±ÖÓ
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); //Ê¹ÄÜGPIOAµÄÊ±ÖÓ
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE); //Ê¹ÄÜGPIOCµÄÊ±ÖÓ
-  
-  //ÅäÖÃPC1
-  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_1;           //ÉèÖÃÒı½Å
-  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_IPU;        //ÉèÖÃÊäÈëÀàĞÍ
-  GPIO_Init(GPIOC, &GPIO_InitStructure);                //¸ù¾İ²ÎÊı³õÊ¼»¯GPIO
-  
-  //ÅäÖÃPC2
-  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_2;           //ÉèÖÃÒı½Å
-  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_IPU;        //ÉèÖÃÊäÈëÀàĞÍ
-  GPIO_Init(GPIOC, &GPIO_InitStructure);                //¸ù¾İ²ÎÊı³õÊ¼»¯GPIO
+  GPIO_InitTypeDef GPIO_InitStructure;
 
-  //ÅäÖÃPA0
-  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_0;           //ÉèÖÃÒı½Å
-  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_IPU;        //ÉèÖÃÊäÈëÀàĞÍ
-  GPIO_Init(GPIOA, &GPIO_InitStructure);                //¸ù¾İ²ÎÊı³õÊ¼»¯GPIO
+
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE);
+
+
+  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_1;
+  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_IPU;
+  GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+
+  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_2;
+  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_IPU;
+  GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+
+  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_0;
+  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_IPU;
+  GPIO_Init(GPIOA, &GPIO_InitStructure);
 }
 
-/*********************************************************************************************************
-*                                              APIº¯ÊıÊµÏÖ
-*********************************************************************************************************/
-/*********************************************************************************************************
-* º¯ÊıÃû³Æ£ºInitKeyOne
-* º¯Êı¹¦ÄÜ£º³õÊ¼»¯KeyOneÄ£¿é
-* ÊäÈë²ÎÊı£ºvoid
-* Êä³ö²ÎÊı£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º
-*********************************************************************************************************/
+
 void InitKeyOne(void)
 {
-  ConfigKeyOneGPIO(); //ÅäÖÃ°´¼üµÄGPIO 
-                                                                
-  s_arrKeyDownLevel[KEY_NAME_KEY1] = KEY_DOWN_LEVEL_KEY1;  //°´¼üKEY1°´ÏÂÊ±ÎªµÍµçÆ½
-  s_arrKeyDownLevel[KEY_NAME_KEY2] = KEY_DOWN_LEVEL_KEY2;  //°´¼üKEY2°´ÏÂÊ±ÎªµÍµçÆ½
-  s_arrKeyDownLevel[KEY_NAME_KEY3] = KEY_DOWN_LEVEL_KEY3;  //°´¼üKEY3°´ÏÂÊ±ÎªµÍµçÆ½
+  ConfigKeyOneGPIO();
+
+  s_arrKeyDownLevel[KEY_NAME_KEY1] = KEY_DOWN_LEVEL_KEY1;
+  s_arrKeyDownLevel[KEY_NAME_KEY2] = KEY_DOWN_LEVEL_KEY2;
+  s_arrKeyDownLevel[KEY_NAME_KEY3] = KEY_DOWN_LEVEL_KEY3;
 }
 
-/*********************************************************************************************************
-* º¯ÊıÃû³Æ£ºScanKeyOne
-* º¯Êı¹¦ÄÜ£º°´¼üÉ¨Ãè£¬Ã¿10msµ÷ÓÃÒ»´Î
-* ÊäÈë²ÎÊı£ºkeyName-°´¼üÃû£¬OnKeyOneUp-°´¼üµ¯ÆğÏìÓ¦º¯ÊıµÄÖ¸Õë£¬OnKeyOneDown-°´¼ü°´ÏÂÏìÓ¦º¯ÊıµÄÖ¸Õë
-* Êä³ö²ÎÊı£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£ºÈç¹ûs_arrKeyDownLevel[keyName] = 0xFF£¬¶Ôs_arrKeyDownLevel[keyName]Ö±½ÓÈ¡·´µÃ³öµÄÊÇ256£¬¶ø·Ç0
-*           ÕıÈ·µÄ×ö·¨ÊÇ(u8)(~s_arrKeyDownLevel[keyName])£¬ÕâÑùµÃ³öµÄ²ÅÊÇ0¡£
-*********************************************************************************************************/
+//æ‰«ææŒ‰é”®
 void ScanKeyOne(u8 keyName, void(*OnKeyOneUp)(void), void(*OnKeyOneDown)(void))
 {
-  static  u8  s_arrKeyVal[KEY_NAME_MAX];    //¶¨ÒåÒ»¸öu8ÀàĞÍµÄÊı×é£¬ÓÃÓÚ´æ·Å°´¼üµÄÊıÖµ
-  static  u8  s_arrKeyFlag[KEY_NAME_MAX];   //¶¨ÒåÒ»¸öu8ÀàĞÍµÄÊı×é£¬ÓÃÓÚ´æ·Å°´¼üµÄ±êÖ¾Î»
-  
-  s_arrKeyVal[keyName] = s_arrKeyVal[keyName] << 1;   //×óÒÆÒ»Î»
+  static  u8  s_arrKeyVal[KEY_NAME_MAX];
+  static  u8  s_arrKeyFlag[KEY_NAME_MAX];
+
+  s_arrKeyVal[keyName] = s_arrKeyVal[keyName] << 1;
 
   switch (keyName)
   {
     case KEY_NAME_KEY1:
-      s_arrKeyVal[keyName] = s_arrKeyVal[keyName] | KEY1; //°´ÏÂ/µ¯ÆğÊ±£¬KEY1Îª0/1
-      break;                                            
-    case KEY_NAME_KEY2:                                 
-      s_arrKeyVal[keyName] = s_arrKeyVal[keyName] | KEY2; //°´ÏÂ/µ¯ÆğÊ±£¬KEY2Îª0/1
-      break;                                            
-    case KEY_NAME_KEY3:                                 
-      s_arrKeyVal[keyName] = s_arrKeyVal[keyName] | KEY3; //°´ÏÂ/µ¯ÆğÊ±£¬KEY3Îª0/1
-      break;                                            
+      s_arrKeyVal[keyName] = s_arrKeyVal[keyName] | KEY1;
+      break;
+    case KEY_NAME_KEY2:
+      s_arrKeyVal[keyName] = s_arrKeyVal[keyName] | KEY2;
+      break;
+    case KEY_NAME_KEY3:
+      s_arrKeyVal[keyName] = s_arrKeyVal[keyName] | KEY3;
+      break;
     default:
       break;
-  }  
-  
-  //°´¼ü±êÖ¾Î»µÄÖµÎªTRUEÊ±£¬ÅĞ¶ÏÊÇ·ñÓĞ°´¼üÓĞĞ§°´ÏÂ
+  }
+
+
   if(s_arrKeyVal[keyName] == s_arrKeyDownLevel[keyName] && s_arrKeyFlag[keyName] == TRUE)
   {
-    (*OnKeyOneDown)();                    //Ö´ĞĞ°´¼ü°´ÏÂµÄÏìÓ¦º¯Êı
-    s_arrKeyFlag[keyName] = FALSE;        //±íÊ¾°´¼ü´¦ÓÚ°´ÏÂ×´Ì¬£¬°´¼ü±êÖ¾Î»µÄÖµ¸ü¸ÄÎªFALSE
+    (*OnKeyOneDown)();
+    s_arrKeyFlag[keyName] = FALSE;
   }
-  
-  //°´¼ü±êÖ¾Î»µÄÖµÎªFALSEÊ±£¬ÅĞ¶ÏÊÇ·ñÓĞ°´¼üÓĞĞ§µ¯Æğ
+
+
   else if(s_arrKeyVal[keyName] == (u8)(~s_arrKeyDownLevel[keyName]) && s_arrKeyFlag[keyName] == FALSE)
   {
-    (*OnKeyOneUp)();                      //Ö´ĞĞ°´¼üµ¯ÆğµÄÏìÓ¦º¯Êı
-    s_arrKeyFlag[keyName] = TRUE;         //±íÊ¾°´¼ü´¦ÓÚµ¯Æğ×´Ì¬£¬°´¼ü±êÖ¾Î»µÄÖµ¸ü¸ÄÎªTRUE
+    (*OnKeyOneUp)();
+    s_arrKeyFlag[keyName] = TRUE;
   }
+}
+
+//åˆ¤å®šæŸä¸ªæŒ‰é”®æ˜¯å¦è¢«æŒ‰ä¸‹
+u8 IsKeyPressed(u8 keyName)
+{
+  u8 val = 1;
+  switch (keyName)
+  {
+    case KEY_NAME_KEY1:
+      val = KEY1;
+      break;
+    case KEY_NAME_KEY2:
+      val = KEY2;
+      break;
+    case KEY_NAME_KEY3:
+      val = KEY3;
+      break;
+    default:
+      break;
+  }
+
+  return (val == 0);
 }

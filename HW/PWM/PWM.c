@@ -1,17 +1,17 @@
 /*********************************************************************************************************
 * 模块名称：PWM.c
-* 摘    要：PWM数字脉冲输出模块实现（骨架）
+* 摘    要：PWM数字脉冲输出模块实现，TIM3 CH2(PB5)输出PWM、频率/占空比切换、启停控制
 * 当前版本：1.0.0
 * 作    者：成员B（信号发生模块）
 * 完成日期：2026年08月
-* 内    容：TIM3 CH1(PA6)初始化、频率/占空比切换、启停控制
-* 注    意：本文件为骨架，成员B需补全定时器配置与寄存器操作
+* 内    容：基础任务5——PWM数字脉冲发生
+*           频率档位：100Hz / 1kHz / 5kHz
+*           占空比档位：25% / 50% / 75%
+* 注    意：固定PSC=71，计数速率1MHz；频率 = 1000000/(ARR+1)；使用TIM3部分重映射，CH2输出PB5
+*           PWM模式2，输出极性Low；开启预装载；频率误差须 ≤ 2%
 **********************************************************************************************************
-* 取代版本：
-* 作    者：mayi
-* 完成日期：2026/8/8
-* 修改内容：
-* 修改文件：
+* 取代版本：TIM3 CH1(PA6)版本
+* 修改内容：硬件迁移TIM3 CH2 PB5；对齐项目金标准函数名与逻辑；采用ARR查表、千分比计算CCR
 *********************************************************************************************************/
 
 /*********************************************************************************************************
@@ -21,196 +21,184 @@
 #include "stm32f10x_conf.h"
 
 /*********************************************************************************************************
-*                                              宏定义
+*                                              内部常量与变量
 *********************************************************************************************************/
+/*
+ * 频率查找表：每种 PWMFreq 选项对应的 ARR 值。
+ * 计数速率 = 72MHz / (PSC+1) = 72MHz / 72 = 1MHz
+ * PWM 频率 = 1MHz / (ARR+1)
+ *
+ * 索引：  PWM_FREQ_100Hz -> 9999  -> 1MHz/10000  = 100Hz
+ *         PWM_FREQ_1KHz  -> 999   -> 1MHz/1000   = 1kHz
+ *         PWM_FREQ_5KHz  -> 199   -> 1MHz/200    = 5kHz
+ */
+static const u16 s_freqArr[] = {9999, 999, 199};
+
+/*
+ * 占空比查找表：每种 PWMDuty 选项对应的千分比（0~1000）。
+ * CCR = (ARR+1) * duty_permille / 1000
+ *
+ * 索引：  PWM_DUTY_25 -> 250  -> 25%
+ *         PWM_DUTY_50 -> 500  -> 50%
+ *         PWM_DUTY_75 -> 750  -> 75%
+ */
+static const u16 s_dutyArr[] = {250, 500, 750};
+
+static PWMFreq s_freq = PWM_FREQ_1KHz;
+static PWMDuty s_duty = PWM_DUTY_50;
+static u8 s_pwmRunning = 0;   //PWM运行标志
 
 /*********************************************************************************************************
-*                                              内部变量
+*                                              内部函数原型
 *********************************************************************************************************/
-static u8  s_pwmRunning = 0;   //PWM运行标志
-
-/*********************************************************************************************************
-*                                              枚举结构体定义
-*********************************************************************************************************/
-
-/*********************************************************************************************************
-*                                              内部函数声明
-*********************************************************************************************************/
+static void ConfigTimer3ForPWMPB5(u16 arr, u16 psc);
 
 /*********************************************************************************************************
 *                                              内部函数实现
 *********************************************************************************************************/
+/*
+ * 配置 TIM3 通道 2，在 PB5 上输出 PWM。
+ *
+ * 必要设置：
+ *   - 使能 TIM3、GPIOB、AFIO 时钟
+ *   - GPIO_PartialRemap_TIM3：将 TIM3_CH2 从 PA7 重映射到 PB5
+ *   - PB5：GPIO_Mode_AF_PP（复用功能推挽输出）
+ *   - TIM3：向上计数，PSC=71（1MHz 计数速率）
+ *   - TIM3 CH2：PWM 模式 2，输出使能，极性 Low
+ *   - 使能 TIM3 预装载，用于 OC2
+ *
+ * 参数 arr：自动重装载值（决定频率）
+ * 参数 psc：预分频器值（通常为 71，得到 1MHz 计数）
+ */
+static void ConfigTimer3ForPWMPB5(u16 arr, u16 psc)
+{
+    GPIO_InitTypeDef        GPIO_InitStructure;
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    TIM_OCInitTypeDef       TIM_OCInitStructure;
+
+    //开启时钟
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB | RCC_APB2Periph_AFIO, ENABLE);
+
+    //TIM3部分重映射：TIM3_CH2 -> PB5
+    GPIO_PinRemapConfig(GPIO_PartialRemap_TIM3, ENABLE);
+
+    //PB5 复用推挽输出
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+    //时基配置
+    TIM_TimeBaseStructure.TIM_Prescaler     = psc;
+    TIM_TimeBaseStructure.TIM_Period        = arr;
+    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseStructure.TIM_CounterMode   = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);
+
+    //CH2 PWM模式2，极性低
+    TIM_OCInitStructure.TIM_OCMode      = TIM_OCMode_PWM2;
+    TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+    TIM_OCInitStructure.TIM_OCPolarity  = TIM_OCPolarity_Low;
+    TIM_OC2Init(TIM3, &TIM_OCInitStructure);
+
+    TIM_OC2PreloadConfig(TIM3, TIM_OCPreload_Enable);
+    TIM_ARRPreloadConfig(TIM3, ENABLE);
+
+    TIM_SetCompare2(TIM3, 0); //初始CCR=0，无输出
+    TIM_Cmd(TIM3, DISABLE);
+}
 
 /*********************************************************************************************************
 *                                              API函数实现
 *********************************************************************************************************/
-/*********************************************************************************************************
-* 函数名称：InitPWM
-* 函数功能：初始化PWM模块，配置TIM3 CH1(PA6)为PWM输出模式
-* 输入参数：void
-* 输出参数：void
-* 返 回 值：void
-* 创建日期：2026年08月
-* 注    意：默认100Hz/50%，但暂不启动输出
-*********************************************************************************************************/
-void  InitPWM(void)
+/*
+ * 使用默认设置（1kHz，50% 占空比）初始化 PWM。
+ * 配置定时器并将初始 CCR 设为 0（无输出）。
+ */
+void InitPWM(void)
 {
-  //TODO(成员B):
-  //1. 使能TIM3与GPIOA时钟
-  //2. 配置PA6为复用推挽输出
-  //3. 配置TIM3时基：默认PSC=7199, ARR=99（100Hz）
-  //4. 配置TIM3_CH1为PWM模式1，CCR1=50（50%）
-  //5. 暂不使能TIM3输出
-  
-  //1. 使能TIM3与GPIOA时钟
-  GPIO_InitTypeDef GPIO_InitStructure;
-  TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
-  TIM_OCInitTypeDef TIM_OCInitStructure;
-  
-  RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3,ENABLE);
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA,ENABLE);
-
-  //2. 配置PA6为复用推挽输出
-  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_Init(GPIOA,&GPIO_InitStructure);
-  
-  //3. 配置TIM3时基：默认PSC=7199, ARR=99（100Hz）
-  TIM_TimeBaseStructure.TIM_Period = 99;                 
-  TIM_TimeBaseStructure.TIM_Prescaler = 7199;              
-  TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;      //TDTS = Tck_tim,不分割
-  TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up; //向上计数模式
-  TIM_TimeBaseInit(TIM3,&TIM_TimeBaseStructure);
-  
-  //4. 配置TIM3_CH1为PWM模式1，CCR1=50（50%）
-  TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1; 
-  TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
-  TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
-  TIM_OCInitStructure.TIM_Pulse = 50; 
-  TIM_OC1Init(TIM3, &TIM_OCInitStructure);
-  
-  //5. 暂不使能TIM3输出
-  TIM_Cmd(TIM3, DISABLE);
- 
-  s_pwmRunning = 0;
+    s_freq = PWM_FREQ_1KHz;
+    s_duty = PWM_DUTY_50;
+    s_pwmRunning = 0;
+    ConfigTimer3ForPWMPB5(s_freqArr[s_freq], 71);
 }
 
-/*********************************************************************************************************
-* 函数名称：PWM_SetFreq
-* 函数功能：设置PWM频率档位
-* 输入参数：idx - 频率档位 0=100Hz, 1=1kHz, 2=5kHz
-* 输出参数：void
-* 返 回 值：void
-* 创建日期：2026年08月
-* 注    意：通过修改PSC实现档位切换
-*           100Hz: PSC=7199  1kHz: PSC=719  5kHz: PSC=143
-*********************************************************************************************************/
-void  PWM_SetFreq(EnumPWMFreq idx)
+/*
+ * 以指定的频率和占空比启动 PWM 输出。
+ *
+ * 步骤：
+ *   1. 将频率和占空比保存到内部状态
+ *   2. 使用 s_freqArr[freq] 和 PSC=71 配置 TIM3
+ *   3. 计算 CCR = (ARR+1) * s_dutyArr[duty] / 1000
+ *   4. 通过 TIM_SetCompare2 设置 CCR
+ *   5. 使能 TIM3
+ *
+ * 参数 freq：PWMFreq 枚举值（100Hz / 1kHz / 5kHz）
+ * 参数 duty：PWMDuty 枚举值（25% / 50% / 75%）
+ */
+void StartPWM(PWMFreq freq, PWMDuty duty)
 {
-  //TODO(成员B): 根据idx修改TIM3的PSC寄存器
-    u16 psc_val = 7199;
-    switch(idx)
-    {
-        case PWM_FREQ_100HZ:
-            psc_val = 7199;
-            break;
-        case PWM_FREQ_1KHZ:
-            psc_val = 719;
-            break;
-        case PWM_FREQ_5KHZ:
-            psc_val = 143;
-            break;
-        case PWM_FREQ_MAX:
-        default:
-            psc_val = 7199; // 非法档位默认100Hz
-            break;
-    }
-    TIM_PrescalerConfig(TIM3, psc_val, TIM_PSCReloadMode_Immediate);    // 立即更新预分频值
-    
-  (void)idx;  //占位，避免编译警告
+    u16 arrVal;
+    u32 ccrVal;
+
+    s_freq = freq;
+    s_duty = duty;
+    arrVal = s_freqArr[s_freq];
+
+    //更新ARR
+    TIM_SetAutoreload(TIM3, arrVal);
+    //计算CCR
+    ccrVal = (u32)(arrVal + 1) * s_dutyArr[s_duty] / 1000UL;
+    TIM_SetCompare2(TIM3, (u16)ccrVal);
+
+    TIM_Cmd(TIM3, ENABLE);
+    s_pwmRunning = 1;
 }
 
-/*********************************************************************************************************
-* 函数名称：PWM_SetDuty
-* 函数功能：设置PWM占空比档位
-* 输入参数：idx - 占空比档位 0=25%, 1=50%, 2=75%
-* 输出参数：void
-* 返 回 值：void
-* 创建日期：2026年08月
-* 注    意：通过修改CCR1实现档位切换
-*********************************************************************************************************/
-void  PWM_SetDuty(EnumPWMDuty idx)      //只可传入结构体内成员
+/*
+ * 停止 PWM 输出。
+ * 将 CCR 设为 0 并禁用 TIM3。
+ */
+void StopPWM(void)
 {
-  //TODO(成员B): 根据idx修改TIM3的CCR1寄存器
-    u16 ccr_val = 50;
-    switch(idx)
-    {
-        case PWM_DUTY_25:
-            ccr_val = 25;
-            break;
-        case PWM_DUTY_50:
-            ccr_val = 50;
-            break;
-        case PWM_DUTY_75:
-            ccr_val = 75;
-            break;
-        case PWM_DUTY_MAX:
-        default:
-            ccr_val = 50; // 默认50%
-            break;
-    }
-    TIM_SetCompare1(TIM3, ccr_val);
-    
-  (void)idx;  //占位，避免编译警告
+    TIM_SetCompare2(TIM3, 0);
+    TIM_Cmd(TIM3, DISABLE);
+    s_pwmRunning = 0;
 }
 
-/*********************************************************************************************************
-* 函数名称：PWM_Start
-* 函数功能：启动PWM输出
-* 输入参数：void
-* 输出参数：void
-* 返 回 值：void
-* 创建日期：2026年08月
-* 注    意：使能TIM3主输出
-*********************************************************************************************************/
-void  PWM_Start(void)
+/*
+ * 不重启定时器，修改 PWM 频率。
+ * 使用 TIM_SetAutoreload 修改 ARR，然后根据当前占空比重算 CCR。
+ *
+ * 参数 freq：新的 PWMFreq 枚举值
+ */
+void SetPWMFreq(PWMFreq freq)
 {
-  //TODO(成员B): 
-  TIM_Cmd(TIM3, ENABLE); 
-  TIM_CtrlPWMOutputs(TIM3, ENABLE);
-  s_pwmRunning = 1;
+    u16 arrVal;
+    u32 ccrVal;
+
+    s_freq = freq;
+    arrVal = s_freqArr[s_freq];
+    TIM_SetAutoreload(TIM3, arrVal);
+
+    ccrVal = (u32)(arrVal + 1) * s_dutyArr[s_duty] / 1000UL;
+    TIM_SetCompare2(TIM3, (u16)ccrVal);
 }
 
-/*********************************************************************************************************
-* 函数名称：PWM_Stop
-* 函数功能：停止PWM输出
-* 输入参数：void
-* 输出参数：void
-* 返 回 值：void
-* 创建日期：2026年08月
-* 注    意：关闭输出，引脚输出低电平
-*********************************************************************************************************/
-void  PWM_Stop(void)
+/*
+ * 不重启定时器，修改 PWM 占空比。
+ * 根据当前 ARR 重新计算 CCR = (ARR+1) * s_dutyArr[duty] / 1000。
+ *
+ * 参数 duty：新的 PWMDuty 枚举值
+ */
+void SetPWMDuty(PWMDuty duty)
 {
-  //TODO(成员B): 
-  TIM_Cmd(TIM3, DISABLE); 
-  TIM_CtrlPWMOutputs(TIM3, DISABLE);
-  s_pwmRunning = 0;
+    u16 arrVal;
+    u32 ccrVal;
+
+    s_duty = duty;
+    arrVal = s_freqArr[s_freq];
+    ccrVal = (u32)(arrVal + 1) * s_dutyArr[s_duty] / 1000UL;
+    TIM_SetCompare2(TIM3, (u16)ccrVal);
 }
-
-/*********************************************************************************************************
-* 函数名称：PWM_IsRunning
-* 函数功能：查询PWM是否正在输出
-* 输入参数：void
-* 输出参数：void
-* 返 回 值：1=运行中 0=已停止
-* 创建日期：2026年08月
-* 注    意：
-*********************************************************************************************************/
-u8  PWM_IsRunning(void)
-{
-  return s_pwmRunning;
-}
-
-

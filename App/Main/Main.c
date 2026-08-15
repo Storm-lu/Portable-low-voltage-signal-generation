@@ -1,187 +1,187 @@
-/*********************************************************************************************************
-* Ä£¿éÃû³Æ£ºMain.c
-* Õª    Òª£ºÖ÷ÎÄ¼ş£¬°üº¬ÈíÓ²¼ş³õÊ¼»¯º¯ÊıºÍmainº¯Êı
-* µ±Ç°°æ±¾£º1.0.0
-* ×÷    Õß£ºSZLY(COPYRIGHT 2018 - 2020 SZLY. All rights reserved.)
-* Íê³ÉÈÕÆÚ£º2020Äê01ÔÂ01ÈÕ
-* ÄÚ    Èİ£º
-* ×¢    Òâ£º×¢Òâ¹´Ñ¡Options for Target 'Target1'->Code Generation->Use MicroLIB£¬·ñÔòprintfÎŞ·¨Ê¹ÓÃ                                                                  
-**********************************************************************************************************
-* È¡´ú°æ±¾£º
-* ×÷    Õß£º
-* Íê³ÉÈÕÆÚ£º
-* ĞŞ¸ÄÄÚÈİ£º
-* ĞŞ¸ÄÎÄ¼ş£º
-*********************************************************************************************************/
-
-/*********************************************************************************************************
-*                                              °üº¬Í·ÎÄ¼ş
-*********************************************************************************************************/
 #include "Main.h"
-#include "stm32f10x_conf.h"
-#include "DataType.h"
-#include "NVIC.h"
-#include "SysTick.h"
-#include "RCC.h"
-#include "Timer.h"
-#include "UART1.h"
-#include "LED.h"
 #include "PackUnpack.h"
 #include "SendDataToHost.h"
-#include "ADC.h"
-#include "DAC.h"
-#include "Wave.h"
 #include "ProcHostCmd.h"
+#include "SignalOutput.h"
+#include "DAC.h"
+#include "PWM.h"
+#include "Display.h"
+#include "KeyOne.h"
+#include "Capture.h"
+#include "ProcKeyOne.h"
+#include "UART1.h"
+#include "Flash.h"
+#include "ADC.h"
+#include "OLED.h"
 
-/*********************************************************************************************************
-*                                              ºê¶¨Òå
-*********************************************************************************************************/
 
-/*********************************************************************************************************
-*                                              ÄÚ²¿±äÁ¿
-*********************************************************************************************************/
+static  void  InitSoftware(void);
+static  void  InitHardware(void);
+static  void  Proc2msTask(void);
+static  void  Proc1SecTask(void);
 
-/*********************************************************************************************************
-*                                              Ã¶¾Ù½á¹¹Ìå¶¨Òå
-*********************************************************************************************************/
-
-/*********************************************************************************************************
-*                                              ÄÚ²¿º¯ÊıÉùÃ÷
-*********************************************************************************************************/
-static  void  InitSoftware(void);   //³õÊ¼»¯Èí¼şÏà¹ØµÄÄ£¿é
-static  void  InitHardware(void);   //³õÊ¼»¯Ó²¼şÏà¹ØµÄÄ£¿é
-static  void  Proc2msTask(void);    //2ms´¦ÀíÈÎÎñ
-static  void  Proc1SecTask(void);   //1s´¦ÀíÈÎÎñ
-
-/*********************************************************************************************************
-*                                              ÄÚ²¿º¯ÊıÊµÏÖ
-*********************************************************************************************************/
-/*********************************************************************************************************
-* º¯ÊıÃû³Æ£ºInitSoftware
-* º¯Êı¹¦ÄÜ£ºËùÓĞµÄÈí¼şÏà¹ØµÄÄ£¿é³õÊ¼»¯º¯Êı¶¼·ÅÔÚ´Ëº¯ÊıÖĞ
-* ÊäÈë²ÎÊı£ºvoid
-* Êä³ö²ÎÊı£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º
-*********************************************************************************************************/
 static  void  InitSoftware(void)
 {
-  InitPackUnpack();       //³õÊ¼»¯PackUnpackÄ£¿é
-  InitSendDataToHost();   //³õÊ¼»¯SendDataToHostÄ£¿é  
-  InitProcHostCmd();      //³õÊ¼»¯ProcHostCmdÄ£¿é
+  InitPackUnpack();
+  InitSendDataToHost();
+  InitProcHostCmd();
 }
 
-/*********************************************************************************************************
-* º¯ÊıÃû³Æ£ºInitHardware
-* º¯Êı¹¦ÄÜ£ºËùÓĞµÄÓ²¼şÏà¹ØµÄÄ£¿é³õÊ¼»¯º¯Êı¶¼·ÅÔÚ´Ëº¯ÊıÖĞ
-* ÊäÈë²ÎÊı£ºvoid
-* Êä³ö²ÎÊı£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º
-*********************************************************************************************************/
+/*
+ * åˆå§‹åŒ–æ‰€æœ‰ç¡¬ä»¶å¤–è®¾ã€‚
+ *
+ * è°ƒç”¨é¡ºåºå¾ˆé‡è¦ï¼å…³é”®ç‚¹ï¼š
+ *   - SystemInit() å¿…é¡»æœ€å…ˆè°ƒç”¨ï¼ˆè®¾ç½® 72MHz æ—¶é’Ÿï¼‰
+ *   - InitSettings() å¿…é¡»åœ¨ InitSignalOutput() ä¹‹å‰è°ƒç”¨
+ *     ï¼ˆInitSignalOutput ä¼šä» Settings è¯»å– Flash ä¸­åŠ è½½çš„æ¨¡å¼ï¼‰
+ *   - InitOLED() å¿…é¡»åœ¨ InitDisplay() ä¹‹å‰ï¼ˆæ˜¾ç¤ºåŠŸèƒ½éœ€è¦ OLEDï¼‰
+ *   - InitIWDG(ç‹¬ç«‹çœ‹é—¨ç‹—) åº”é åè°ƒç”¨ï¼ˆç³»ç»Ÿç¨³å®šåå†å¯åŠ¨çœ‹é—¨ç‹—ï¼‰
+ *
+ * å»ºè®®é¡ºåºï¼š
+ *   SystemInit, InitRCC, InitNVIC, InitUART1(115200), InitTimer,
+ *   InitLED, InitSysTick, InitKeyOne, InitProcKeyOne, InitIWDG,
+ *   InitADC, InitDAC, InitOLED, InitDisplay, InitPWM, InitCapture, InitFlash
+ *
+ * æ³¨æ„ï¼šInitDisplay() å†…éƒ¨ä¼šä¾æ¬¡è°ƒç”¨ InitSignalMeasure() -> InitSettings()
+ *       -> InitSignalOutput()ã€‚InitOLED å¿…é¡»åœ¨ InitDisplay ä¹‹å‰è°ƒç”¨ï¼Œ
+ *       ä»¥ä¾¿ä»»ä½•åˆå§‹åŒ–å‡½æ•°éœ€è¦æ˜¾ç¤ºè¯Šæ–­ä¿¡æ¯æ—¶ OLED å·²å°±ç»ªã€‚
+ */
 static  void  InitHardware(void)
-{  
-  SystemInit();       //ÏµÍ³³õÊ¼»¯
-  InitRCC();          //³õÊ¼»¯RCCÄ£¿é
-  InitNVIC();         //³õÊ¼»¯NVICÄ£¿é
-  InitUART1(115200);  //³õÊ¼»¯UARTÄ£¿é
-  InitTimer();        //³õÊ¼»¯TimerÄ£¿é
-  InitLED();          //³õÊ¼»¯LEDÄ£¿é
-  InitSysTick();      //³õÊ¼»¯SysTickÄ£¿é
-  InitADC();          //³õÊ¼»¯ADCÄ£¿é
-  InitDAC();          //³õÊ¼»¯DACÄ£¿é	
+{
+  /* å¾…å®ç°ï¼šæŒ‰æ­£ç¡®é¡ºåºè°ƒç”¨æ‰€æœ‰åˆå§‹åŒ–å‡½æ•°ã€‚
+   *       æ³¨æ„å…ˆåœ¨ Main.h ä¸­åŒ…å«å¯¹åº”çš„å¤´æ–‡ä»¶ï¼
+   *       è¿™äº›å‡½æ•°ç”±ä¸åŒå›¢é˜Ÿæˆå‘˜æä¾›ï¼š
+   *         ç³»ç»Ÿçº§ï¼šSystemInit, InitRCC, InitNVIC, InitUART1, InitTimer,
+   *                InitLED, InitSysTick, InitKeyOne, InitIWDG
+   *         Aç»„ï¼š  InitADC, InitDAC
+   *         Bç»„ï¼š  InitPWM, InitCapture
+   *         Cç»„ï¼š  InitOLED, InitFlash, InitProcKeyOne
+   *         Dç»„ï¼š  InitDisplayï¼ˆå†…éƒ¨è°ƒç”¨ InitSignalMeasure + InitSettings + InitSignalOutputï¼‰ */
+  SystemInit();
+  InitRCC();
+  InitNVIC();
+  InitUART1(115200);
+  InitTimer();
+  InitLED();
+  InitSysTick();
+  InitKeyOne();
+  InitADC();
+  InitDAC();
+  InitPWM();
+  InitCapture();
+  InitOLED();
+  InitFlash();
+  InitProcKeyOne();
+  InitDisplay();
+  InitIWDG();
 }
 
-/*********************************************************************************************************
-* º¯ÊıÃû³Æ£ºProc2msTask
-* º¯Êı¹¦ÄÜ£º2ms´¦ÀíÈÎÎñ 
-* ÊäÈë²ÎÊı£ºvoid
-* Êä³ö²ÎÊı£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º
-*********************************************************************************************************/
+/*
+ * 2ms å‘¨æœŸä»»åŠ¡ - ç³»ç»Ÿå¿ƒè·³ã€‚
+ *
+ * ä»…åœ¨ Get2msFlag() è¿”å›çœŸæ—¶æ‰§è¡Œï¼ˆç”±å®šæ—¶å™¨ä¸­æ–­æœåŠ¡ç¨‹åºç½®ä½ï¼‰ã€‚
+ *
+ * æ¯ 2ms æ‰§è¡Œçš„ä»»åŠ¡ï¼š
+ *   1. æ‰«æå…¨éƒ¨ 3 ä¸ªæŒ‰é”®ï¼šScanKeyOne(KEY_NAME_KEY1, ProcKeyUpKey1, ProcKeyDownKey1)
+ *                         ScanKeyOne(KEY_NAME_KEY2, ProcKeyUpKey2, ProcKeyDownKey2)
+ *                         ScanKeyOne(KEY_NAME_KEY3, ProcKeyUpKey3, ProcKeyDownKey3)
+ *   2. ProcKeyCheckKey3()  - KEY3 é•¿æŒ‰æ£€æµ‹
+ *   3. CaptureTimeoutCheck() - è¾“å…¥æ•è·è¶…æ—¶æ£€æŸ¥ï¼ˆæ¥è‡ª Capture.cï¼‰
+ *   4. DisplayProcess()     - æ˜¾ç¤ºåˆ·æ–°ï¼ˆå†…éƒ¨é™é¢‘åˆ° 10Hzï¼‰
+ *   5. æ¸…é™¤æ ‡å¿—ï¼šClr2msFlag()
+ *
+ * å¯é€‰åŠŸèƒ½ï¼šKEY1+KEY2 åŒæ—¶é•¿æŒ‰ 3 ç§’ -> while(1) æ•…éšœé™·é˜±
+ *           ï¼ˆè®¡æ•° s_faultCntï¼Œè‹¥ >= 1500 åˆ™è¿›å…¥æ­»å¾ªç¯ï¼‰
+ */
 static  void  Proc2msTask(void)
 {
-  u16 adcData;      //¶ÓÁĞÊı¾İ
-  u8  waveData;     //²¨ĞÎÊı¾İ
-  u8  uart1RecData; //´®¿ÚÊı¾İ
-  
-  static u8 s_iCnt4 = 0;   //¼ÆÊıÆ÷
-  static u8 s_iPointCnt = 0;        //²¨ĞÎÊı¾İ°üµÄµã¼ÆÊıÆ÷
-  static u8 s_arrWaveData[5] = {0}; //³õÊ¼»¯Êı×é
-  
-  if(Get2msFlag())  //ÅĞ¶Ï2ms±êÖ¾×´Ì¬
-  { 
-    if(ReadUART1(&uart1RecData, 1)) //¶Á´®¿Ú½ÓÊÕÊı¾İ
-    {       
-      ProcHostCmd(uart1RecData);  //´¦ÀíÃüÁî      
-    }
-    
-    s_iCnt4++;  //¼ÆÊıÔö¼Ó
+  /* æŒ‰ä¸Šè¿°è¯´æ˜å®ç°ã€‚
+   *       ç»„åˆé”®é™·é˜±ä½¿ç”¨ static u16 s_faultCnt è®¡æ•°ã€‚ */
+  static u16 s_faultCnt = 0;
 
-    if(s_iCnt4 >= 4)  //´ïµ½8ms
-    {
-      if(ReadADCBuf(&adcData))  //´Ó»º´æ¶ÓÁĞÖĞÈ¡³ö1¸öÊı¾İ
-      {
-        waveData = (adcData * 127) / 4095;  //¼ÆËã»ñÈ¡µãµÄÎ»ÖÃ
-        s_arrWaveData[s_iPointCnt] = waveData;  //´æ·Åµ½Êı×é
-        s_iPointCnt++;  //²¨ĞÎÊı¾İ°üµÄµã¼ÆÊıÆ÷¼Ó1²Ù×÷
+  if(Get2msFlag())
+  {
+    ScanKeyOne(KEY_NAME_KEY1, ProcKeyUpKey1, ProcKeyDownKey1);
+    ScanKeyOne(KEY_NAME_KEY2, ProcKeyUpKey2, ProcKeyDownKey2);
+    ScanKeyOne(KEY_NAME_KEY3, ProcKeyUpKey3, ProcKeyDownKey3);
+    ProcKeyCheckKey3();
 
-        if(s_iPointCnt >= 5)  //½ÓÊÕµ½5¸öµã
-        {
-          s_iPointCnt = 0;  //¼ÆÊıÆ÷ÇåÁã
-          SendWaveToHost(s_arrWaveData);  //·¢ËÍ²¨ĞÎÊı¾İ°ü
-        }
+    CaptureTimeoutCheck();
+
+    DisplayProcess();
+
+    if(IsKeyPressed(KEY_NAME_KEY1) && IsKeyPressed(KEY_NAME_KEY2)){
+      s_faultCnt++;
+      if(s_faultCnt >= 1500){
+        while(1);
       }
-      s_iCnt4 = 0;  //×¼±¸ÏÂ´ÎµÄÑ­»·
+    }else{
+      s_faultCnt = 0;
     }
-       
-    LEDFlicker(250);//µ÷ÓÃÉÁË¸º¯Êı     
-    Clr2msFlag();   //Çå³ı2ms±êÖ¾
+
+    Clr2msFlag();
   }
 }
 
-/*********************************************************************************************************
-* º¯ÊıÃû³Æ£ºProc1SecTask
-* º¯Êı¹¦ÄÜ£º1s´¦ÀíÈÎÎñ 
-* ÊäÈë²ÎÊı£ºvoid
-* Êä³ö²ÎÊı£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º
-*********************************************************************************************************/
+
+/*
+ * 1 ç§’å‘¨æœŸä»»åŠ¡ - USART çŠ¶æ€è¾“å‡ºã€‚
+ *
+ * ä»…åœ¨ Get1SecFlag() è¿”å›çœŸæ—¶æ‰§è¡Œã€‚
+ *
+ * è¾“å‡ºå†…å®¹å–å†³äºå½“å‰æ˜¾ç¤ºé¡µé¢ï¼š
+ *   ä¿¡å·è¾“å‡ºï¼š  printf("Mode:%d\r\n", (u8)GetSignalOutputType());
+ *   ä¿¡å·æµ‹é‡ï¼š  printf("ADC:%dmV Freq:%dHz\r\n", voltage_mV, freq);
+ *               ï¼ˆvoltage = avg*3300/4096, freq = GetCaptureFreq()ï¼‰
+ *   è®¾ç½®ï¼š      printf("Settings\r\n");
+ *
+ * æœ€åè°ƒç”¨ PrintState() å’Œ Clr1SecFlag()ã€‚
+ */
 static  void  Proc1SecTask(void)
-{ 
-  if(Get1SecFlag()) //ÅĞ¶Ï1s±êÖ¾×´Ì¬
+{
+  /* å¾…å®ç°ï¼šæ£€æŸ¥ Get1SecFlag()ï¼Œæ ¹æ® GetDisplayState() åˆ†æ”¯ï¼Œ
+   *       æ‰“å°ç›¸åº”çŠ¶æ€ï¼Œè°ƒç”¨ PrintState()ã€Clr1SecFlag()ã€‚ */
+  if(Get1SecFlag())
   {
-    //printf("This is the first STM32F103 Project, by Zhangsan\r\n");
-    
-    Clr1SecFlag();  //Çå³ı1s±êÖ¾
-  }    
+    switch(GetDisplayState()){
+      case DISPLAY_SIGNAL_OUTPUT:{
+        SignalOutputType mode = GetSignalOutputType();
+        printf("Mode:%d\r\n", (u8)mode);
+        break;
+      }
+      case DISPLAY_SIGNAL_MEASURE:{
+        u16 avg, maxV, minV, p2p;
+        u32 freq;
+        GetADCStats(&avg, &maxV, &minV, &p2p);
+        freq = GetCaptureFreq();
+        printf("ADC:%dmV Freq:%dHz\r\n", (u16)((u32)avg * 3300 / 4096), freq);
+        break;  
+      }
+      case DISPLAY_SETTINGS:
+      {
+        printf("Settings\r\n");
+        break;
+      }
+    }
+    PrintState();
+    Clr1SecFlag();
+  }
 }
 
-/*********************************************************************************************************
-* º¯ÊıÃû³Æ£ºmain
-* º¯Êı¹¦ÄÜ£ºÖ÷º¯Êı 
-* ÊäÈë²ÎÊı£ºvoid
-* Êä³ö²ÎÊı£ºvoid
-* ·µ »Ø Öµ£ºint
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º
-*********************************************************************************************************/
+
 int main(void)
-{ 
-  InitSoftware();   //³õÊ¼»¯Èí¼şÏà¹Øº¯Êı
-  InitHardware();   //³õÊ¼»¯Ó²¼şÏà¹Øº¯Êı
-  
-  printf("Init System has been finished.\r\n" );  //´òÓ¡ÏµÍ³×´Ì¬
+{
+  InitSoftware();
+  InitHardware();
+
+  /* å¯åŠ¨æ—¶ç¡®ä¿è¾“å‡ºå·²åœæ­¢ */
+  StopDAC();
+  StopPWM();
 
   while(1)
   {
-    Proc2msTask();  //2ms´¦ÀíÈÎÎñ
-    Proc1SecTask(); //1s´¦ÀíÈÎÎñ   
+    Proc2msTask();
+    Proc1SecTask();
+    FeedIWDG();
   }
 }

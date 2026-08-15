@@ -1,238 +1,192 @@
-/*********************************************************************************************************
-* Ä£¿éÃû³Æ£ºADC.c
-* Õª    Òª£ºADCÄ£¿é
-* µ±Ç°°æ±¾£º1.0.0
-* ×÷    Õß£ºSZLY(COPYRIGHT 2018 - 2020 SZLY. All rights reserved.)
-* Íê³ÉÈÕÆÚ£º2020Äê01ÔÂ01ÈÕ
-* ÄÚ    Èİ£º
-* ×¢    Òâ£º                                                                  
-**********************************************************************************************************
-* È¡´ú°æ±¾£º
-* ×÷    Õß£º
-* Íê³ÉÈÕÆÚ£º
-* ĞŞ¸ÄÄÚÈİ£º
-* ĞŞ¸ÄÎÄ¼ş£º
-*********************************************************************************************************/
-/*********************************************************************************************************
-*                                              °üº¬Í·ÎÄ¼ş
-*********************************************************************************************************/
 #include "ADC.h"
 #include "stm32f10x_conf.h"
-#include "U16Queue.h"
 
-/*********************************************************************************************************
-*                                              ºê¶¨Òå
-*********************************************************************************************************/
+/*
+ * ADC é‡‡æ ·å€¼çš„ DMA å¾ªç¯ç¼“å†²åŒºã€‚
+ * DMA1 é€šé“ 1 å°† ADC è½¬æ¢ç»“æœæŒç»­å†™å…¥æ­¤å¤„ã€‚
+ * å¤§å°ï¼šADC_BUF_SIZEï¼ˆ128ï¼‰ä¸ªé‡‡æ ·å€¼ã€‚
+ */
+static u16 s_arrADCSamples[ADC_BUF_SIZE];
 
-/*********************************************************************************************************
-*                                              Ã¶¾Ù½á¹¹Ìå¶¨Òå
-*********************************************************************************************************/
 
-/*********************************************************************************************************
-*                                              ÄÚ²¿±äÁ¿
-*********************************************************************************************************/
-static u16 s_arrADC1Data;   //´æ·ÅADC×ª»»½á¹ûÊı¾İ
-static StructU16CirQue  s_structADCCirQue;            //ADCÑ­»·¶ÓÁĞ
-static u16              s_arrADCBuf[ADC1_BUF_SIZE];   //ADCÑ­»·¶ÓÁĞµÄ»º³åÇø
+/* ---- å†…éƒ¨å‡½æ•°å£°æ˜ ---- */
+static void ConfigADC1(void);
+static void ConfigDMA1Ch1(void);
 
-/*********************************************************************************************************
-*                                              ÄÚ²¿º¯ÊıÉùÃ÷
-*********************************************************************************************************/
-static void ConfigADC1(void);     //ÅäÖÃADC1
-static void ConfigDMA1Ch1(void);  //ÅäÖÃDMAÍ¨µÀ1
-static void ConfigTimer3(u16 arr, u16 psc); //ÅäÖÃTIM3
 
-/*********************************************************************************************************
-*                                              ÄÚ²¿º¯ÊıÊµÏÖ
-*********************************************************************************************************/
-/*********************************************************************************************************
-* º¯ÊıÃû³Æ£ºConfigADC1
-* º¯Êı¹¦ÄÜ£ºÅäÖÃADC1
-* ÊäÈë²ÎÊı£ºvoid
-* Êä³ö²ÎÊı£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£ºADC123_IN1-PA1
-**********************************************************************************************************/
+/*
+ * é…ç½® ADC1 é€šé“ 1ï¼ˆPA1ï¼‰ã€‚
+ *
+ * æ‰€éœ€è®¾ç½®ï¼š
+ *   - ADC æ—¶é’Ÿï¼šRCC_PCLK2_Div6 -> 72MHz/6 = 12MHz
+ *   - PA1ï¼šGPIO_Mode_AINï¼ˆæ¨¡æ‹Ÿè¾“å…¥ï¼‰
+ *   - ADC æ¨¡å¼ï¼šç‹¬ç«‹ï¼ˆå•é€šé“ï¼‰
+ *   - æ‰«ææ¨¡å¼ï¼šç¦æ­¢ï¼ˆå•é€šé“ï¼‰
+ *   - è¿ç»­è½¬æ¢ï¼šä½¿èƒ½ï¼ˆæ¯æ¬¡è½¬æ¢åè‡ªåŠ¨é‡å¯ï¼‰
+ *   - å¤–éƒ¨è§¦å‘ï¼šæ— ï¼ˆè½¯ä»¶å¯åŠ¨ï¼‰
+ *   - æ•°æ®å¯¹é½ï¼šå³å¯¹é½ï¼ˆ12 ä½åœ¨ä½ä½ï¼‰
+ *   - é€šé“ï¼šADC_Channel_1ï¼Œè½¬æ¢é¡ºåºç¬¬ 1ï¼Œé‡‡æ ·æ—¶é—´ 239.5 å‘¨æœŸ
+ *   - ä½¿èƒ½ ADC DMA
+ *   - ä½¿èƒ½ ADC
+ *   - è¿è¡Œæ ¡å‡†ï¼ˆå¤ä½ + ç­‰å¾… + å¯åŠ¨ + ç­‰å¾…ï¼‰
+ *   - å¯åŠ¨è½¯ä»¶è½¬æ¢
+ *
+ * ADC é‡‡æ ·ç‡ = ADC æ—¶é’Ÿ / (é‡‡æ ·æ—¶é—´ + è½¬æ¢æ—¶é—´)
+ *   = 12MHz / (239.5 + 12.5) = 12MHz / 252 â‰ˆ 47.6kHz
+ */
 static void ConfigADC1(void)
-{                          
-  GPIO_InitTypeDef  GPIO_InitStructure; //GPIO_InitStructureÓÃÓÚ´æ·ÅGPIOµÄ²ÎÊı
-  ADC_InitTypeDef   ADC_InitStructure;  //ADC_InitStructureÓÃÓÚ´æ·ÅADCµÄ²ÎÊı
+{
+    /* å®ç° ADC1 + PA1 é…ç½® */
+    RCC_ADCCLKConfig(RCC_PCLK2_Div6);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
 
-  //Ê¹ÄÜRCCÏà¹ØÊ±ÖÓ
-  RCC_ADCCLKConfig(RCC_PCLK2_Div6); //ÉèÖÃADCÊ±ÖÓ·ÖÆµ£¬ADCCLK=PCLK2/6=12MHz
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1  , ENABLE);  //Ê¹ÄÜADC1µÄÊ±ÖÓ
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA , ENABLE);  //Ê¹ÄÜGPIOAµÄÊ±ÖÓ
- 
-  //ÅäÖÃADC1µÄGPIO
-  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_1;    //ÉèÖÃÒı½Å
-  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AIN; //ÉèÖÃÊäÈëÀàĞÍ
-  GPIO_Init(GPIOA, &GPIO_InitStructure);  //¸ù¾İ²ÎÊı³õÊ¼»¯GPIO
+    GPIO_InitTypeDef GPIO_InitStructure;
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
 
-  //ÅäÖÃADC1
-  ADC_InitStructure.ADC_Mode               = ADC_Mode_Independent;  //ÉèÖÃÎª¶ÀÁ¢Ä£Ê½
-  ADC_InitStructure.ADC_ScanConvMode       = ENABLE;                //Ê¹ÄÜÉ¨ÃèÄ£Ê½
-  ADC_InitStructure.ADC_ContinuousConvMode = DISABLE;               //½ûÖ¹Á¬Ğø×ª»»Ä£Ê½
-  ADC_InitStructure.ADC_ExternalTrigConv   = ADC_ExternalTrigConv_T3_TRGO;  //Ê¹ÓÃTIM3´¥·¢
-  ADC_InitStructure.ADC_DataAlign          = ADC_DataAlign_Right;   //ÉèÖÃÎªÓÒ¶ÔÆë
-  ADC_InitStructure.ADC_NbrOfChannel       = 1; //ÉèÖÃADCµÄÍ¨µÀÊıÄ¿
-  ADC_Init(ADC1, &ADC_InitStructure);
+    ADC_InitTypeDef ADC_InitStructure;
+    ADC_InitStructure.ADC_Mode = ADC_Mode_Independent;
+    ADC_InitStructure.ADC_ScanConvMode = DISABLE;
+    ADC_InitStructure.ADC_ContinuousConvMode = ENABLE;
+    ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;
+    ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;
+    ADC_InitStructure.ADC_NbrOfChannel = 1;
+    ADC_Init(ADC1, &ADC_InitStructure);
 
-  ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 1, ADC_SampleTime_239Cycles5); //ÉèÖÃ²ÉÑùÊ±¼äÎª239.5¸öÖÜÆÚ
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 1, ADC_SampleTime_239Cycles5);
 
-  ADC_DMACmd(ADC1, ENABLE);                   //Ê¹ÄÜADC1µÄDMA
-  ADC_ExternalTrigConvCmd(ADC1, ENABLE);      //Ê¹ÓÃÍâ²¿ÊÂ¼şÆô¶¯ADC×ª»»
-  ADC_Cmd(ADC1, ENABLE);                      //Ê¹ÄÜADC1
-  ADC_ResetCalibration(ADC1);                 //Æô¶¯ADC¸´Î»Ğ£×¼£¬¼´½«RSTCAL¸³ÖµÎª1
-  while(ADC_GetResetCalibrationStatus(ADC1)); //¶ÁÈ¡²¢ÅĞ¶ÏRSTCAL£¬RSTCALÎª0Ìø³öwhileÓï¾ä
-  ADC_StartCalibration(ADC1);                 //Æô¶¯ADCĞ£×¼£¬¼´½«CAL¸³ÖµÎª1
-  while(ADC_GetCalibrationStatus(ADC1));      //¶ÁÈ¡²¢ÅĞ¶ÏCAL£¬CALÎª0Ìø³öwhileÓï¾ä
+    ADC_Cmd(ADC1, ENABLE);
+    ADC_DMACmd(ADC1, ENABLE);
+
+    ADC_ResetCalibration(ADC1);
+    while (ADC_GetResetCalibrationStatus(ADC1));
+    ADC_StartCalibration(ADC1);
+    while (ADC_GetCalibrationStatus(ADC1));
+
+    ADC_SoftwareStartConvCmd(ADC1, ENABLE);
 }
 
-/*********************************************************************************************************
-* º¯ÊıÃû³Æ£ºConfigDMA1Ch1
-* º¯Êı¹¦ÄÜ£ºÅäÖÃDMAÍ¨µÀ1
-* ÊäÈë²ÎÊı£ºvoid
-* Êä³ö²ÎÊı£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º
-**********************************************************************************************************/
+
+/*
+ * é…ç½® DMA1 é€šé“ 1ï¼Œå°† ADC ç»“æœä¼ è¾“è‡³å­˜å‚¨å™¨ã€‚
+ *
+ * æ‰€éœ€è®¾ç½®ï¼š
+ *   - æ–¹å‘ï¼šå¤–è®¾ -> å­˜å‚¨å™¨
+ *   - å¤–è®¾åœ°å€ï¼š&ADC1->DRï¼ˆADC æ•°æ®å¯„å­˜å™¨ï¼‰
+ *   - å­˜å‚¨å™¨åœ°å€ï¼šs_arrADCSamples
+ *   - ç¼“å†²åŒºå¤§å°ï¼šADC_BUF_SIZEï¼ˆ128ï¼‰
+ *   - æ¨¡å¼ï¼šå¾ªç¯ï¼ˆæŒç»­é‡‡é›†ï¼‰
+ *   - æ•°æ®å¤§å°ï¼šä¸¤è€…å‡ä¸ºåŠå­—ï¼ˆ16 ä½ï¼‰
+ *   - å¤–è®¾åœ°å€è‡ªå¢ï¼šç¦æ­¢ï¼Œå­˜å‚¨å™¨åœ°å€è‡ªå¢ï¼šä½¿èƒ½
+ *   - ä¼˜å…ˆçº§ï¼šä¸­ç­‰
+ */
 static void ConfigDMA1Ch1(void)
 {
-  DMA_InitTypeDef DMA_InitStructure;  //DMA_InitStructureÓÃÓÚ´æ·ÅDMAµÄ²ÎÊı
-  
-  //Ê¹ÄÜRCCÏà¹ØÊ±ÖÓ
-  RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);  //Ê¹ÄÜDMA1µÄÊ±ÖÓ
-  
-  //ÅäÖÃDMA1_Channel1
-  DMA_DeInit(DMA1_Channel1);  //½«DMA1_CH1¼Ä´æÆ÷ÉèÖÃÎªÄ¬ÈÏÖµ
-  DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)&(ADC1->DR);           //ÉèÖÃÍâÉèµØÖ·
-  DMA_InitStructure.DMA_MemoryBaseAddr     = (uint32_t)&s_arrADC1Data;        //ÉèÖÃ´æ´¢Æ÷µØÖ·
-  DMA_InitStructure.DMA_DIR                = DMA_DIR_PeripheralSRC;           //ÉèÖÃÎªÍâÉèµ½´æ´¢Æ÷Ä£Ê½
-  DMA_InitStructure.DMA_BufferSize         = 1;                               //ÉèÖÃÒª´«ÊäµÄÊı¾İÏîÊıÄ¿
-  DMA_InitStructure.DMA_PeripheralInc      = DMA_PeripheralInc_Disable;       //ÉèÖÃÍâÉèÎª·ÇµİÔöÄ£Ê½
-  DMA_InitStructure.DMA_MemoryInc          = DMA_MemoryInc_Enable;            //ÉèÖÃ´æ´¢Æ÷ÎªµİÔöÄ£Ê½
-  DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord; //ÉèÖÃÍâÉèÊı¾İ³¤¶ÈÎª°ë×Ö
-  DMA_InitStructure.DMA_MemoryDataSize     = DMA_MemoryDataSize_HalfWord;     //ÉèÖÃ´æ´¢Æ÷Êı¾İ³¤¶ÈÎª°ë×Ö
-  DMA_InitStructure.DMA_Mode               = DMA_Mode_Circular;               //ÉèÖÃÎªÑ­»·Ä£Ê½
-  DMA_InitStructure.DMA_Priority           = DMA_Priority_Medium;             //ÉèÖÃÎªÖĞµÈÓÅÏÈ¼¶
-  DMA_InitStructure.DMA_M2M                = DMA_M2M_Disable;                 //½ûÖ¹´æ´¢Æ÷µ½´æ´¢Æ÷·ÃÎÊ
-  DMA_Init(DMA1_Channel1, &DMA_InitStructure);  //¸ù¾İ²ÎÊı³õÊ¼»¯DMA1_Channel1
-  
-  DMA_Cmd(DMA1_Channel1, ENABLE); //Ê¹ÄÜDMA1_Channel1
+    /* å®ç° DMA1 é€šé“ 1 é…ç½® */
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+
+    DMA_InitTypeDef DMA_InitStructure;
+    DMA_InitStructure.DMA_PeripheralBaseAddr = (u32)&ADC1->DR;
+    DMA_InitStructure.DMA_MemoryBaseAddr = (u32)s_arrADCSamples;
+    DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;
+    DMA_InitStructure.DMA_BufferSize = ADC_BUF_SIZE;
+    DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
+    DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;
+    DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord;
+    DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;
+    DMA_InitStructure.DMA_Mode = DMA_Mode_Circular;
+    DMA_InitStructure.DMA_Priority = DMA_Priority_Medium;
+    DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
+
+    DMA_Init(DMA1_Channel1, &DMA_InitStructure);
+    DMA_Cmd(DMA1_Channel1, ENABLE);
 }
 
-/*********************************************************************************************************
-* º¯ÊıÃû³Æ£ºConfigTimer3
-* º¯Êı¹¦ÄÜ£ºÅäÖÃ¶¨Ê±Æ÷TIM3µÄ²ÎÊı
-* ÊäÈë²ÎÊı£ºarr-×Ô¶¯ÖØ×°Öµ£¬psc-Ê±ÖÓÔ¤·ÖÆµÊı
-* Êä³ö²ÎÊı£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º 
-**********************************************************************************************************/
-static void ConfigTimer3(u16 arr, u16 psc)
-{
-  TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure; //TIM_TimeBaseStructureÓÃÓÚ´æ·ÅTIM3µÄ²ÎÊı
-  NVIC_InitTypeDef NVIC_InitStructure;            //NVIC_InitStructureÓÃÓÚ´æ·ÅNVICµÄ²ÎÊı
-    
-  //Ê¹ÄÜRCCÏà¹ØÊ±ÖÓ
-  RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);  //Ê¹ÄÜTIM3µÄÊ±ÖÓ
 
-  //ÅäÖÃTIM3
-  TIM_TimeBaseStructure.TIM_Period        = arr;  //ÉèÖÃ×Ô¶¯ÖØ×°ÔØÖµ
-  TIM_TimeBaseStructure.TIM_Prescaler     = psc;  //ÉèÖÃÔ¤·ÖÆµÆ÷Öµ
-  TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;       //ÉèÖÃÊ±ÖÓ·Ö¸î£ºtDTS = tCK_INT
-  TIM_TimeBaseStructure.TIM_CounterMode   = TIM_CounterMode_Up; //ÉèÖÃÏòÉÏ¼ÆÊıÄ£Ê½
-  TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);               //¸ù¾İ²ÎÊı³õÊ¼»¯¶¨Ê±Æ÷  
-  
-  TIM_SelectOutputTrigger(TIM3,TIM_TRGOSource_Update);          //Ñ¡Ôñ¸üĞÂÊÂ¼şÎª´¥·¢ÊäÈë
-  
-  TIM_ITConfig(TIM3, TIM_IT_Update,ENABLE);                     //Ê¹ÄÜ¶¨Ê±Æ÷µÄ¸üĞÂÖĞ¶Ï
-  
-  //ÅäÖÃNVIC
-  NVIC_InitStructure.NVIC_IRQChannel      = TIM3_IRQn;          //ÖĞ¶ÏÍ¨µÀºÅ
-  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;     //ÉèÖÃÇÀÕ¼ÓÅÏÈ¼¶
-  NVIC_InitStructure.NVIC_IRQChannelSubPriority        = 1;     //ÉèÖÃ×ÓÓÅÏÈ¼¶
-  NVIC_InitStructure.NVIC_IRQChannelCmd   = ENABLE;             //Ê¹ÄÜÖĞ¶Ï
-  NVIC_Init(&NVIC_InitStructure);                               //¸ù¾İ²ÎÊı³õÊ¼»¯NVIC
-  
-  TIM_Cmd(TIM3, ENABLE);  //Ê¹ÄÜ¶¨Ê±Æ÷
-}
- 
-/*********************************************************************************************************
-* º¯ÊıÃû³Æ£ºTIM3_IRQHandler
-* º¯Êı¹¦ÄÜ£ºTIM3ÖĞ¶Ï·şÎñº¯Êı
-* ÊäÈë²ÎÊı£ºvoid
-* Êä³ö²ÎÊı£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º
-**********************************************************************************************************/
-void TIM3_IRQHandler(void)
-{  
-  if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)  //ÅĞ¶Ï¶¨Ê±Æ÷¸üĞÂÖĞ¶ÏÊÇ·ñ·¢Éú
-  {
-    TIM_ClearITPendingBit(TIM3, TIM_FLAG_Update);     //Çå³ı¶¨Ê±Æ÷¸üĞÂÖĞ¶Ï±êÖ¾ 
-  }  
-
-  WriteADCBuf(s_arrADC1Data);   //ÏòADC»º³åÇøĞ´ÈëÊı¾İ
-}
-
-/*********************************************************************************************************
-*                                              APIº¯ÊıÊµÏÖ
-*********************************************************************************************************/
-/*********************************************************************************************************
-* º¯ÊıÃû³Æ£ºInitADC
-* º¯Êı¹¦ÄÜ£º³õÊ¼»¯ADCÄ£¿é
-* ÊäÈë²ÎÊı£ºvoid
-* Êä³ö²ÎÊı£ºvoid
-* ·µ »Ø Öµ£ºvoid
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º
-**********************************************************************************************************/
+/*
+ * åˆå§‹åŒ– ADC ç³»ç»Ÿã€‚
+ * è°ƒç”¨ ConfigADC1()ï¼Œç„¶åè°ƒç”¨ ConfigDMA1Ch1()ã€‚
+ */
 void InitADC(void)
 {
-  ConfigTimer3(799, 719);   //100KHz£¬¼ÆÊıµ½800Îª8ms
-  ConfigADC1();             //ÅäÖÃADC1
-  ConfigDMA1Ch1();          //ÅäÖÃDMA1µÄÍ¨µÀ1
-
-  InitU16Queue(&s_structADCCirQue, s_arrADCBuf, ADC1_BUF_SIZE); //³õÊ¼»¯ADC»º³åÇø  
+    /* åˆå§‹åŒ– ADC ç³»ç»Ÿ */
+    ConfigADC1();
+    ConfigDMA1Ch1();
 }
 
-/*********************************************************************************************************
-* º¯ÊıÃû³Æ£ºWriteADCBuf
-* º¯Êı¹¦ÄÜ£ºÏòADC»º³åÇøĞ´ÈëÊı¾İ
-* ÊäÈë²ÎÊı£ºd-´ıĞ´ÈëµÄÊı¾İ
-* Êä³ö²ÎÊı£ºvoid
-* ·µ »Ø Öµ£º³É¹¦±êÖ¾Î»£¬1Îª³É¹¦£¬0Îª²»³É¹¦
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º
-**********************************************************************************************************/
-u8 WriteADCBuf(u16 d)
+
+/*
+ * è¿”å›æŒ‡å‘ ADC é‡‡æ ·ç¼“å†²åŒºï¼ˆ128 ä¸ªé‡‡æ ·å€¼ï¼Œu16ï¼‰çš„æŒ‡é’ˆã€‚
+ * ç¼“å†²åŒºç”± DMA åœ¨å¾ªç¯æ¨¡å¼ä¸‹æŒç»­æ›´æ–°ã€‚
+ *
+ * è°ƒç”¨è€…ï¼šSignalMeasure.c -> DisplaySignalMeasure()
+ */
+u16* GetADCBuf(void)
 {
-  u8 ok = 0;  //½«¶ÁÈ¡³É¹¦±êÖ¾Î»µÄÖµÉèÖÃÎª0
-
-  ok = EnU16Queue(&s_structADCCirQue, &d, 1); //Èë¶Ó
-
-  return ok;  //·µ»Ø¶ÁÈ¡³É¹¦±êÖ¾Î»µÄÖµ
+    /* è¿”å› s_arrADCSamples æŒ‡é’ˆ */
+    return (u16*)s_arrADCSamples;
 }
 
-/*********************************************************************************************************
-* º¯ÊıÃû³Æ£ºReadADCBuf
-* º¯Êı¹¦ÄÜ£º´ÓADC»º³åÇø¶ÁÈ¡Êı¾İ
-* ÊäÈë²ÎÊı£ºp-¶ÁÈ¡µÄÊı¾İ´æ·ÅµÄÊ×µØÖ·
-* Êä³ö²ÎÊı£ºvoid
-* ·µ »Ø Öµ£º³É¹¦±êÖ¾Î»£¬1Îª³É¹¦£¬0Îª²»³É¹¦
-* ´´½¨ÈÕÆÚ£º2018Äê01ÔÂ01ÈÕ
-* ×¢    Òâ£º
-**********************************************************************************************************/
-u8 ReadADCBuf(u16* p)
+
+/*
+ * è¿”å›æœ€æ–°çš„ ADC é‡‡æ ·å€¼ã€‚
+ * è¯»å– DMA1 é€šé“ 1 çš„å½“å‰æ•°æ®è®¡æ•°å™¨ä»¥æ‰¾åˆ°æœ€æ–°å†™å…¥ä½ç½®ã€‚
+ *
+ * è°ƒç”¨è€…ï¼šï¼ˆå¯é€‰ï¼Œç”¨äºå•æ¬¡é‡‡æ ·è¯»å–ï¼‰
+ */
+u16 GetADCLatest(void)
 {
-  u8 ok = 0;  //½«¶ÁÈ¡³É¹¦±êÖ¾Î»µÄÖµÉèÖÃÎª0
+    /* è¯»å– DMA è®¡æ•°å™¨ï¼Œè®¡ç®—æœ€æ–°ä½ç½®ï¼Œè¿”å›é‡‡æ ·å€¼ */
+    u16 nextIndex = DMA_GetCurrDataCounter(DMA1_Channel1);
+    u16 index = ADC_BUF_SIZE - nextIndex;
+    if(index == 0){
+        index = ADC_BUF_SIZE - 1;
+    }else{
+        index--;   
+    }
+    return s_arrADCSamples[index];
+}
 
-  ok = DeU16Queue(&s_structADCCirQue, p, 1); //³ö¶Ó
 
-  return ok;  //·µ»Ø¶ÁÈ¡³É¹¦±êÖ¾Î»µÄÖµ
+/*
+ * è®¡ç®—æ•´ä¸ª ADC ç¼“å†²åŒºçš„ç»Ÿè®¡ä¿¡æ¯ã€‚
+ *
+ * å‚æ•°å‡ä¸ºè¾“å‡ºæŒ‡é’ˆï¼š
+ *   pAvgï¼šæ‰€æœ‰ 128 ä¸ªé‡‡æ ·å€¼çš„å¹³å‡å€¼ï¼ˆ0~4095ï¼‰
+ *   pMaxï¼šæ‰¾åˆ°çš„æœ€å¤§å€¼ï¼ˆ0~4095ï¼‰
+ *   pMinï¼šæ‰¾åˆ°çš„æœ€å°å€¼ï¼ˆ0~4095ï¼‰
+ *   pP2Pï¼šå³°å³°å€¼ = æœ€å¤§å€¼ - æœ€å°å€¼ï¼ˆ0~4095ï¼‰
+ *
+ * ç”µå‹è½¬æ¢ï¼šç”µå‹_mV = å€¼ * 3300 / 4095
+ *
+ * è°ƒç”¨è€…ï¼šSignalMeasure.cã€Main.cï¼ˆProc1SecTaskï¼‰
+ */
+void GetADCStats(u16 *pAvg, u16 *pMax, u16 *pMin, u16 *pP2P)
+{
+    /* éå† s_arrADCSamplesï¼Œè®¡ç®—å¹³å‡å€¼/æœ€å¤§å€¼/æœ€å°å€¼/å³°å³°å€¼ */
+    u32 sum = 0;
+    u16 max = 0;
+    u16 min = 0xFFFF;
+    u16 p2p = 0;
+
+    for(u16 i = 0; i < ADC_BUF_SIZE; i++){
+        u16 val = s_arrADCSamples[i];
+        sum += val;
+        if(val > max){
+        max = val;
+        }
+        if(val < min){
+        min = val;
+        }
+    }
+
+    p2p = max - min;
+
+    *pAvg = (u16)(sum / ADC_BUF_SIZE);
+    *pMax = max;
+    *pMin = min;
+    *pP2P = p2p;  /* [FIX] åŸä¸º 2 * p2pï¼Œå³°å³°å€¼è¢«ç¿»å€ */
 }
